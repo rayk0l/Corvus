@@ -1,0 +1,11 @@
+# Corvus YARA Rule Disable List
+# ==============================
+# Add filenames (one per line) to exclude specific YARA rules from scanning.
+# Lines starting with # are comments and are ignored.
+#
+# Use this to disable community rules that produce false positives
+# on your environment. Custom rules can also be disabled here.
+#
+# Example:
+#   apt_apt10.yar
+#   crime_emotet.yar

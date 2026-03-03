@@ -1,0 +1,58 @@
+# ============================================================
+# Suspicious / Known Backdoor Ports
+# Format: port_number:description
+# Lines starting with # are comments.
+# ============================================================
+
+# --- Metasploit / Meterpreter ---
+4444:Metasploit default handler
+4445:Metasploit secondary handler
+8443:Metasploit HTTPS handler
+
+# --- Common Backdoor Ports ---
+1234:Generic backdoor port
+5555:Android ADB / backdoor
+6666:IRC backdoor
+6667:IRC C2
+6668:IRC C2
+6669:IRC C2
+31337:Back Orifice
+31338:Back Orifice 2
+12345:NetBus
+12346:NetBus
+20034:NetBus Pro
+27374:SubSeven
+54321:Back Orifice 2000
+65535:Common backdoor test port
+
+# --- RAT (Remote Access Trojan) ---
+1604:DarkComet
+3150:DeepThroat
+3460:Poison Ivy
+5110:ProRat
+7777:Tini backdoor
+8080:Common web shell
+8888:Common reverse shell
+9999:Common backdoor
+10000:Webmin / common backdoor
+19283:SilverRAT
+
+# --- Cobalt Strike ---
+50050:Cobalt Strike Team Server
+443:HTTPS C2 (common for CS, note: also legitimate)
+
+# --- Crypto Mining ---
+3333:Crypto mining pool (Stratum)
+5556:Crypto mining pool
+8333:Bitcoin P2P
+14444:XMR mining pool (MoneroOcean)
+14433:XMR mining pool
+45700:XMR mining pool
+
+# --- Reverse Shell Common ---
+1337:Common leet port
+2222:Alternative SSH / reverse shell
+4443:Alternative HTTPS reverse shell
+7443:Alternate HTTPS C2
+9090:Common web-based C2
+9443:Alternative HTTPS C2

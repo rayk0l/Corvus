@@ -1,0 +1,71 @@
+{
+    "_comment": "Endpoint Security Scanner v2.0 Configuration",
+    "_comment2": "Delete any key to use its default value. Delete this file to use all defaults.",
+    "_comment3": "Run with: scanner.exe --profile full (or quick/standard/forensic)",
+
+    "scan": {
+        "_comment": "File scan settings",
+        "max_file_size_mb": 50,
+        "max_signature_scan_size_mb": 10,
+        "file_scan_threads": 4,
+        "file_scan_max_depth": 10,
+
+        "_comment2": "Memory scan settings",
+        "memory_scan_max_per_process_mb": 50,
+
+        "_comment3": "Event log settings",
+        "event_log_days": 7,
+        "event_log_max_events": 2000
+    },
+
+    "modules": {
+        "_comment": "Set false to disable specific modules",
+        "file_scanner": true,
+        "network_scanner": true,
+        "persistence_scanner": true,
+        "process_scanner": true,
+        "memory_scanner": true,
+        "vulnerability_scanner": true,
+        "service_scanner": true,
+        "eventlog_scanner": true,
+        "security_config_scanner": true,
+        "dns_scanner": true,
+        "port_scanner": true,
+        "hosts_scanner": true,
+        "ads_scanner": true,
+        "pipe_scanner": true,
+        "dll_hijack_scanner": true,
+        "amcache_scanner": true,
+        "prefetch_scanner": true,
+        "powershell_history_scanner": true,
+        "credential_scanner": true,
+        "browser_scanner": true,
+        "attack_vector_scanner": true,
+        "certificate_store_scanner": true,
+        "scheduled_task_scanner": true,
+        "usb_scanner": true
+    },
+
+    "exclusions": {
+        "_comment": "Exclude specific paths, processes or hashes from scanning",
+        "paths": [],
+        "processes": [],
+        "hashes": []
+    },
+
+    "output": {
+        "html_report": true,
+        "json_report": true,
+        "log_level": "INFO",
+        "auto_open_report": true
+    },
+
+    "online": {
+        "_comment": "Online enrichment (--online flag required). API keys for VirusTotal and AbuseIPDB.",
+        "enabled": false,
+        "vt_api_key": "",
+        "abuseipdb_api_key": "",
+        "vt_rate_limit_per_min": 4,
+        "abuseipdb_rate_limit_per_day": 1000
+    }
+}

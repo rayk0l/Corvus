@@ -1,0 +1,6 @@
+psutil>=5.9.0
+yara-python>=4.3.0
+tqdm>=4.65.0
+nuitka>=2.1
+ordered-set>=4.1.0
+zstandard>=0.22.0

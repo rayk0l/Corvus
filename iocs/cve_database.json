@@ -1,0 +1,675 @@
+{
+  "version": "2026-02-26",
+  "description": "Offline CVE database for endpoint vulnerability scanning",
+  "entries": [
+    {
+      "software": "Microsoft Windows",
+      "pattern": "windows",
+      "cves": [
+        {
+          "id": "CVE-2017-0144",
+          "name": "EternalBlue (MS17-010)",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected": "SMBv1",
+          "description": "Remote code execution in SMBv1. Used by WannaCry, NotPetya.",
+          "kb_fix": "KB4012212"
+        },
+        {
+          "id": "CVE-2019-0708",
+          "name": "BlueKeep",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected": "RDP",
+          "description": "Remote code execution in Remote Desktop Services.",
+          "kb_fix": "KB4499175"
+        },
+        {
+          "id": "CVE-2020-1472",
+          "name": "Zerologon",
+          "severity": "CRITICAL",
+          "cvss": 10.0,
+          "affected": "Netlogon",
+          "description": "Privilege escalation via Netlogon protocol.",
+          "kb_fix": "KB4571694"
+        },
+        {
+          "id": "CVE-2021-1675",
+          "name": "PrintNightmare",
+          "severity": "CRITICAL",
+          "cvss": 8.8,
+          "affected": "Print Spooler",
+          "description": "Remote code execution in Print Spooler service.",
+          "kb_fix": "KB5004945"
+        },
+        {
+          "id": "CVE-2021-34527",
+          "name": "PrintNightmare RCE",
+          "severity": "CRITICAL",
+          "cvss": 8.8,
+          "affected": "Print Spooler",
+          "description": "Remote code execution variant of PrintNightmare.",
+          "kb_fix": "KB5004945"
+        },
+        {
+          "id": "CVE-2021-36934",
+          "name": "HiveNightmare/SeriousSAM",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected": "SAM Database",
+          "description": "Local privilege escalation via SAM database access."
+        },
+        {
+          "id": "CVE-2022-30190",
+          "name": "Follina",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected": "MSDT",
+          "description": "Remote code execution via Microsoft Diagnostic Tool."
+        },
+        {
+          "id": "CVE-2023-23397",
+          "name": "Outlook Elevation of Privilege",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected": "Outlook",
+          "description": "NTLM relay via Outlook calendar invite."
+        },
+        {
+          "id": "CVE-2023-36884",
+          "name": "Office/Windows HTML RCE",
+          "severity": "HIGH",
+          "cvss": 8.3,
+          "affected": "Office",
+          "description": "Remote code execution via specially crafted Office documents."
+        },
+        {
+          "id": "CVE-2024-21338",
+          "name": "Windows Kernel Elevation",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected": "Kernel",
+          "description": "Kernel privilege escalation used by Lazarus Group."
+        },
+        {
+          "id": "CVE-2024-30088",
+          "name": "Windows Kernel Privilege Escalation",
+          "severity": "HIGH",
+          "cvss": 7.0,
+          "affected": "Kernel",
+          "description": "Use-after-free in Windows kernel."
+        }
+      ]
+    },
+    {
+      "software": "Microsoft Office",
+      "pattern": "microsoft office|microsoft 365|office professional|office home",
+      "cves": [
+        {
+          "id": "CVE-2017-11882",
+          "name": "Equation Editor RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<16.0.8900",
+          "description": "Memory corruption in Equation Editor. Widely exploited."
+        },
+        {
+          "id": "CVE-2017-0199",
+          "name": "OLE2Link RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<16.0.8201",
+          "description": "Remote code execution via OLE2Link in RTF/DOCX files."
+        },
+        {
+          "id": "CVE-2021-40444",
+          "name": "MSHTML RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<16.0.14326",
+          "description": "Remote code execution via ActiveX controls in Office documents."
+        },
+        {
+          "id": "CVE-2022-30190",
+          "name": "Follina MSDT",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<16.0.15330",
+          "description": "Remote code execution via ms-msdt protocol handler."
+        }
+      ]
+    },
+    {
+      "software": "Adobe Acrobat Reader",
+      "pattern": "adobe acrobat|adobe reader",
+      "cves": [
+        {
+          "id": "CVE-2023-26369",
+          "name": "Acrobat Out-of-Bounds Write",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<23.006.20320",
+          "description": "Arbitrary code execution via crafted PDF."
+        },
+        {
+          "id": "CVE-2023-21608",
+          "name": "Acrobat Use-After-Free",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<22.003.20310",
+          "description": "Use-after-free vulnerability in Acrobat."
+        },
+        {
+          "id": "CVE-2024-41869",
+          "name": "Acrobat Reader RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<24.003.20054",
+          "description": "Use-after-free leading to arbitrary code execution."
+        }
+      ]
+    },
+    {
+      "software": "Java Runtime",
+      "pattern": "java \\d|java(tm)|java se|jre |jdk ",
+      "match_mode": "regex",
+      "cves": [
+        {
+          "id": "CVE-2021-44228",
+          "name": "Log4Shell",
+          "severity": "CRITICAL",
+          "cvss": 10.0,
+          "affected_versions": "<2.17.0",
+          "description": "Remote code execution in Log4j. Affects Java applications globally."
+        },
+        {
+          "id": "CVE-2022-21449",
+          "name": "Psychic Signatures",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<18.0.1",
+          "description": "ECDSA signature validation bypass in Java."
+        }
+      ]
+    },
+    {
+      "software": "Google Chrome",
+      "pattern": "google chrome",
+      "cves": [
+        {
+          "id": "CVE-2024-7971",
+          "name": "Chrome V8 Type Confusion",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<128.0.6613.84",
+          "description": "Type confusion in V8. Exploited in the wild."
+        },
+        {
+          "id": "CVE-2024-5274",
+          "name": "Chrome V8 Type Confusion",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<125.0.6422.112",
+          "description": "V8 type confusion exploited in the wild."
+        },
+        {
+          "id": "CVE-2024-4947",
+          "name": "Chrome V8 Type Confusion",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<125.0.6422.60",
+          "description": "V8 type confusion, active exploitation."
+        }
+      ]
+    },
+    {
+      "software": "Mozilla Firefox",
+      "pattern": "mozilla firefox",
+      "cves": [
+        {
+          "id": "CVE-2024-9680",
+          "name": "Firefox Animation Timeline UAF",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "<131.0.2",
+          "description": "Use-after-free in Animation timelines. Exploited in the wild."
+        },
+        {
+          "id": "CVE-2024-9936",
+          "name": "Firefox Sandbox Escape",
+          "severity": "HIGH",
+          "cvss": 8.1,
+          "affected_versions": "<132.0",
+          "description": "Sandbox escape vulnerability."
+        }
+      ]
+    },
+    {
+      "software": "7-Zip",
+      "pattern": "7-zip",
+      "cves": [
+        {
+          "id": "CVE-2024-11477",
+          "name": "7-Zip Zstandard Decompression RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<24.07",
+          "description": "Integer underflow in Zstandard decompression leading to RCE."
+        },
+        {
+          "id": "CVE-2023-31102",
+          "name": "7-Zip 7Z Integer Overflow",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<23.01",
+          "description": "Integer overflow in 7Z archive handling."
+        }
+      ]
+    },
+    {
+      "software": "WinRAR",
+      "pattern": "winrar",
+      "cves": [
+        {
+          "id": "CVE-2023-38831",
+          "name": "WinRAR Code Execution",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<6.23",
+          "description": "Arbitrary code execution via crafted RAR archive. Widely exploited by APTs."
+        },
+        {
+          "id": "CVE-2023-40477",
+          "name": "WinRAR Recovery Volume RCE",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<6.23",
+          "description": "Out-of-bounds write in recovery volume processing."
+        }
+      ]
+    },
+    {
+      "software": "PuTTY",
+      "pattern": "putty",
+      "cves": [
+        {
+          "id": "CVE-2024-31497",
+          "name": "PuTTY ECDSA Key Recovery",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "<0.81",
+          "description": "ECDSA private key recovery due to biased nonce generation."
+        }
+      ]
+    },
+    {
+      "software": "OpenSSL",
+      "pattern": "openssl",
+      "cves": [
+        {
+          "id": "CVE-2024-5535",
+          "name": "OpenSSL Buffer Over-read",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<3.3.2",
+          "description": "Buffer over-read in SSL_select_next_proto."
+        },
+        {
+          "id": "CVE-2022-3602",
+          "name": "OpenSSL X.509 Buffer Overflow",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<3.0.7",
+          "description": "Buffer overflow in X.509 certificate verification."
+        }
+      ]
+    },
+    {
+      "software": "Python",
+      "pattern": "python 3|python 2",
+      "cves": [
+        {
+          "id": "CVE-2023-24329",
+          "name": "Python URL Parsing Bypass",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<3.11.4",
+          "description": "URL parsing bypass allowing blocklist circumvention."
+        }
+      ]
+    },
+    {
+      "software": "Node.js",
+      "pattern": "node.js|nodejs",
+      "cves": [
+        {
+          "id": "CVE-2024-22019",
+          "name": "Node.js HTTP Request Smuggling",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<20.11.1",
+          "description": "HTTP request smuggling via chunk extension parsing."
+        }
+      ]
+    },
+    {
+      "software": "Apache HTTP Server",
+      "pattern": "apache http server|apache httpd",
+      "cves": [
+        {
+          "id": "CVE-2021-41773",
+          "name": "Apache Path Traversal",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "2.4.49",
+          "description": "Path traversal and RCE via crafted request."
+        },
+        {
+          "id": "CVE-2024-38476",
+          "name": "Apache SSRF/RCE",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "<2.4.62",
+          "description": "Server-side request forgery leading to RCE."
+        }
+      ]
+    },
+    {
+      "software": "nginx",
+      "pattern": "nginx",
+      "cves": [
+        {
+          "id": "CVE-2024-24989",
+          "name": "nginx HTTP/3 NULL Pointer",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<1.25.4",
+          "description": "NULL pointer dereference in HTTP/3 module."
+        }
+      ]
+    },
+    {
+      "software": "PHP",
+      "pattern": "php \\d",
+      "match_mode": "regex",
+      "cves": [
+        {
+          "id": "CVE-2024-4577",
+          "name": "PHP CGI Argument Injection",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "<8.3.8",
+          "description": "Argument injection in PHP CGI on Windows."
+        },
+        {
+          "id": "CVE-2024-2961",
+          "name": "PHP iconv Buffer Overflow",
+          "severity": "HIGH",
+          "cvss": 8.1,
+          "affected_versions": "<8.3.6",
+          "description": "Buffer overflow in iconv leading to RCE."
+        }
+      ]
+    },
+    {
+      "software": "VMware Workstation",
+      "pattern": "vmware workstation|vmware player|vmware tools",
+      "cves": [
+        {
+          "id": "CVE-2023-34048",
+          "name": "VMware vCenter Server RCE",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "description": "Out-of-bounds write in vCenter DCE/RPC protocol.",
+          "applicable": false,
+          "note": "vCenter only, not Workstation"
+        },
+        {
+          "id": "CVE-2024-37079",
+          "name": "VMware vCenter Heap Overflow",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "description": "Heap overflow in vCenter Server.",
+          "applicable": false,
+          "note": "vCenter only, not Workstation"
+        }
+      ]
+    },
+    {
+      "software": "Fortinet FortiClient",
+      "pattern": "forticlient",
+      "cves": [
+        {
+          "id": "CVE-2024-21762",
+          "name": "FortiOS Out-of-Bounds Write",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "description": "Out-of-bounds write in FortiOS SSL VPN.",
+          "applicable": false,
+          "note": "FortiOS only, not FortiClient"
+        },
+        {
+          "id": "CVE-2023-27997",
+          "name": "FortiOS Heap Overflow",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "description": "Heap overflow in FortiOS SSL-VPN.",
+          "applicable": false,
+          "note": "FortiOS only, not FortiClient"
+        }
+      ]
+    },
+    {
+      "software": "Cisco AnyConnect",
+      "pattern": "cisco anyconnect|cisco secure client",
+      "cves": [
+        {
+          "id": "CVE-2023-20178",
+          "name": "AnyConnect Privilege Escalation",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<5.0",
+          "description": "Local privilege escalation in Cisco AnyConnect."
+        }
+      ]
+    },
+    {
+      "software": "Zoom",
+      "pattern": "zoom workplace|zoom meetings|zoom \\(",
+      "match_mode": "regex",
+      "cves": [
+        {
+          "id": "CVE-2024-24691",
+          "name": "Zoom Input Validation RCE",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<5.16.5",
+          "description": "Improper input validation leading to code execution."
+        }
+      ]
+    },
+    {
+      "software": "TeamViewer",
+      "pattern": "teamviewer",
+      "cves": [
+        {
+          "id": "CVE-2024-7479",
+          "name": "TeamViewer Privilege Escalation",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<15.58.4",
+          "description": "Improper signature verification leading to privilege escalation."
+        }
+      ]
+    },
+    {
+      "software": "AnyDesk",
+      "pattern": "anydesk",
+      "cves": [
+        {
+          "id": "CVE-2024-12754",
+          "name": "AnyDesk Local Privilege Escalation",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<9.0.1",
+          "description": "Local privilege escalation via background service."
+        }
+      ]
+    },
+    {
+      "software": "VLC Media Player",
+      "pattern": "vlc media player",
+      "cves": [
+        {
+          "id": "CVE-2023-47360",
+          "name": "VLC MMS Integer Overflow",
+          "severity": "HIGH",
+          "cvss": 7.5,
+          "affected_versions": "<3.0.21",
+          "description": "Integer overflow in MMS stream handling."
+        }
+      ]
+    },
+    {
+      "software": "Wireshark",
+      "pattern": "wireshark",
+      "cves": [
+        {
+          "id": "CVE-2024-8250",
+          "name": "Wireshark NTLMSSP Dissector Crash",
+          "severity": "MEDIUM",
+          "cvss": 5.5,
+          "affected_versions": "<4.2.7",
+          "description": "Denial of service via crafted NTLMSSP packet."
+        }
+      ]
+    },
+    {
+      "software": "FileZilla",
+      "pattern": "filezilla client",
+      "cves": [
+        {
+          "id": "CVE-2023-48795",
+          "name": "Terrapin SSH Attack",
+          "severity": "MEDIUM",
+          "cvss": 5.9,
+          "affected_versions": "<3.66.4",
+          "description": "SSH protocol prefix truncation attack (Terrapin)."
+        }
+      ]
+    },
+    {
+      "software": "Git",
+      "pattern": "git for windows|git version",
+      "cves": [
+        {
+          "id": "CVE-2024-32002",
+          "name": "Git Clone RCE",
+          "severity": "CRITICAL",
+          "cvss": 9.0,
+          "affected_versions": "<2.45.1",
+          "description": "Remote code execution via crafted repository with symlinks."
+        }
+      ]
+    },
+    {
+      "software": "Visual Studio Code",
+      "pattern": "microsoft visual studio code",
+      "cves": [
+        {
+          "id": "CVE-2024-26165",
+          "name": "VS Code Workspace Trust Bypass",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<1.86.1",
+          "description": "Remote code execution via workspace trust bypass."
+        }
+      ]
+    },
+    {
+      "software": "cURL",
+      "pattern": "curl for windows|curl \\d",
+      "match_mode": "regex",
+      "cves": [
+        {
+          "id": "CVE-2023-38545",
+          "name": "cURL SOCKS5 Heap Overflow",
+          "severity": "CRITICAL",
+          "cvss": 9.8,
+          "affected_versions": "<8.4.0",
+          "description": "Heap buffer overflow in SOCKS5 proxy handshake."
+        }
+      ]
+    },
+    {
+      "software": "Microsoft SQL Server",
+      "pattern": "microsoft sql server",
+      "cves": [
+        {
+          "id": "CVE-2024-37330",
+          "name": "SQL Server Native Scoring RCE",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<2022",
+          "description": "Remote code execution via native scoring mechanism."
+        }
+      ]
+    },
+    {
+      "software": "MySQL",
+      "pattern": "mysql server|mysql workbench",
+      "cves": [
+        {
+          "id": "CVE-2024-21047",
+          "name": "MySQL Server DoS",
+          "severity": "MEDIUM",
+          "cvss": 4.9,
+          "affected_versions": "<8.0.37",
+          "description": "Denial of service in MySQL Server optimizer."
+        }
+      ]
+    },
+    {
+      "software": "PostgreSQL",
+      "pattern": "postgresql",
+      "cves": [
+        {
+          "id": "CVE-2024-10979",
+          "name": "PostgreSQL PL/Perl Env Variable RCE",
+          "severity": "HIGH",
+          "cvss": 8.8,
+          "affected_versions": "<16.4",
+          "description": "Arbitrary code execution via environment variable manipulation."
+        }
+      ]
+    },
+    {
+      "software": "Docker Desktop",
+      "pattern": "docker desktop",
+      "cves": [
+        {
+          "id": "CVE-2024-41110",
+          "name": "Docker AuthZ Plugin Bypass",
+          "severity": "CRITICAL",
+          "cvss": 9.9,
+          "affected_versions": "<27.1.1",
+          "description": "Authorization plugin bypass leading to privilege escalation."
+        }
+      ]
+    },
+    {
+      "software": "Notepad++",
+      "pattern": "notepad++ (",
+      "cves": [
+        {
+          "id": "CVE-2023-40031",
+          "name": "Notepad++ Heap Buffer Overflow",
+          "severity": "HIGH",
+          "cvss": 7.8,
+          "affected_versions": "<8.5.7",
+          "description": "Heap buffer write overflow in UTF8 to UTF16 conversion."
+        }
+      ]
+    }
+  ]
+}
