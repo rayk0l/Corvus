@@ -75,3 +75,6 @@ scan_log_*.txt
 
 # --- Documentation build ---
 docs/node_modules/
+
+# --- Project instructions (local only) ---
+CLAUDE.md

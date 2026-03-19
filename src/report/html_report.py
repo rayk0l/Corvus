@@ -487,6 +487,8 @@ def generate(
         "browser_scanner":           ("🌐", "Browser Extension Security"),
         "attack_vector_scanner":     ("⚠️", "Dangerous File Extension Detection"),
         "certificate_store_scanner": ("🔐", "Root Certificate Trust Store Analysis"),
+        "scheduled_task_scanner":    ("📅", "Scheduled Task Anomaly Detection"),
+        "usb_scanner":               ("💾", "USB Device & BadUSB Detection"),
     }
     modules = []
     for _, display_name, config_key in SCANNER_REGISTRY:
