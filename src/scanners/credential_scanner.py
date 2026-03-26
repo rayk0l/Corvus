@@ -243,7 +243,13 @@ def _scan_sensitive_files() -> List[Finding]:
                     if fname_lower in SAFE_SKIP_FILES:
                         continue
 
-                    if full_path.lower() in reported_paths:
+                    # Dedup by real path — symlinks/junctions resolve
+                    # to same file. Different dirs = different findings.
+                    try:
+                        _real = os.path.realpath(full_path).lower()
+                    except (OSError, ValueError):
+                        _real = full_path.lower()
+                    if _real in reported_paths:
                         continue
 
                     for pattern, desc, risk, mitre in SENSITIVE_FILE_PATTERNS:
@@ -298,7 +304,7 @@ def _scan_sensitive_files() -> List[Finding]:
                             if not _is_private_key_content(full_path):
                                 continue  # Not a real private key, skip entirely
 
-                        reported_paths.add(full_path.lower())
+                        reported_paths.add(_real)
                         finding = Finding(
                             module="Credential Scanner",
                             risk=actual_risk,

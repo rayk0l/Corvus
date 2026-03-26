@@ -56,6 +56,10 @@ def scan() -> List[Finding]:
     bad_ips = load_ioc_file("bad_ips.txt")
     print(f"  [i] Loaded {len(bad_ips)} known malicious IPs")
 
+    tor_exits = load_ioc_file("tor_exits.txt")
+    if tor_exits:
+        print(f"  [i] Loaded {len(tor_exits)} Tor exit node IPs")
+
     try:
         connections = psutil.net_connections(kind="tcp")
     except psutil.AccessDenied:
@@ -106,6 +110,37 @@ def scan() -> List[Finding]:
             findings.append(finding)
             print_finding(finding)
             continue
+
+        # ---- CHECK 1b: Tor exit node (INFO — audit only) ----
+        if tor_exits and remote_ip.lower() in tor_exits:
+            tor_key = f"tor:{remote_ip}"
+            if tor_key not in reported:
+                reported.add(tor_key)
+                finding = Finding(
+                    module="Network Scanner",
+                    risk=RiskLevel.INFO,
+                    title=f"Connection to Tor exit node: {remote_ip}",
+                    description=(
+                        f"Process '{proc_name}' is connected to a known Tor exit node. "
+                        "Tor usage is not inherently malicious but may indicate "
+                        "anonymized C2 traffic or data exfiltration."
+                    ),
+                    details={
+                        "remote_ip": remote_ip,
+                        "remote_port": remote_port,
+                        "process": proc_name,
+                        "process_path": proc_path,
+                        "pid": pid,
+                        "tor_exit_node": True,
+                    },
+                    mitre_id="T1090.003",
+                    remediation=(
+                        "Investigate why this process is communicating with Tor. "
+                        "If unexpected, check for malware using Tor for C2."
+                    ),
+                )
+                findings.append(finding)
+                print_finding(finding)
 
         # ---- Skip known developer tools entirely ----
         if is_known_dev_tool(proc_name, proc_path):

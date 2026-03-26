@@ -474,6 +474,18 @@ def _analyze_lnk_data(
         args_stripped = arguments.strip()
         if not args_stripped:
             return None
+        # Developer tool shortcuts that launch via cmd/powershell are
+        # legitimate (Claude Code, npm scripts, dev environments).
+        # Use word-boundary regex to avoid matching substrings
+        # (e.g., "git" inside "legit").
+        import re as _re
+        _DEV_TOOL_RE = _re.compile(
+            r"\bclaude\b|\bnode\b|\bnpm\b|\bnpx\b|\byarn\b|\bpnpm\b"
+            r"|\bcursor\b|\bpython\b|\bconda\b|\bdocker\b|\bgit\b|\bwsl\b",
+            _re.IGNORECASE,
+        )
+        if _DEV_TOOL_RE.search(args_stripped):
+            return None
 
     # Determine risk level
     if matched_patterns and is_suspicious_target:
@@ -551,13 +563,39 @@ def _analyze_disk_image(filepath: str, ext: str) -> Finding:
 
     # Large ISOs/IMGs (>200MB) are almost always legitimate OS images.
     # Weaponized MOTW-bypass ISOs are typically <50MB.
+    fp_reason = None
     if ext in (".iso", ".img"):
         try:
             file_size = os.path.getsize(filepath)
             if file_size > 200 * 1024 * 1024:
                 risk = RiskLevel.INFO
+                fp_reason = f"Large file ({file_size // (1024*1024)}MB) — likely OS image"
         except OSError:
             pass
+
+    # Known OS/security distribution ISOs — downgrade to INFO, not delete.
+    # Bilinmeyen ISO → orijinal risk korunur (evil_payload.iso → MEDIUM/HIGH)
+    if ext in (".iso", ".img") and not fp_reason:
+        _KNOWN_OS_PATTERNS = (
+            "kali-linux", "kali_linux", "ubuntu-", "debian-", "fedora-",
+            "centos-", "tails-", "zorin-", "mint-", "arch-", "manjaro-",
+            "parrot-", "en_windows_", "tr_windows_", "windows_server_",
+            "vmware-", "esxi-", "proxmox-",
+        )
+        name_lower = basename.lower()
+        if any(p in name_lower for p in _KNOWN_OS_PATTERNS):
+            risk = RiskLevel.INFO
+            fp_reason = "Known OS/security distribution"
+
+    det = {
+        "path": filepath,
+        "extension": ext,
+        "size": size_str,
+        "created": created,
+        "attack_technique": "MOTW bypass",
+    }
+    if fp_reason:
+        det["fp_reason"] = fp_reason
 
     return Finding(
         module="Attack Vector Scanner",
@@ -567,13 +605,7 @@ def _analyze_disk_image(filepath: str, ext: str) -> Finding:
             f"{ext_info['description']}. "
             f"Files inside disk images lack Zone.Identifier (MOTW bypass)."
         ),
-        details={
-            "path": filepath,
-            "extension": ext,
-            "size": size_str,
-            "created": created,
-            "attack_technique": "MOTW bypass",
-        },
+        details=det,
         mitre_id=ext_info["mitre"],
         remediation=(
             "Verify the origin of this file. If unexpected, delete immediately. "
@@ -590,6 +622,9 @@ def _analyze_chm(filepath: str) -> Finding:
     _SAFE_CHM_DIRS = (
         "\\program files\\", "\\program files (x86)\\",
         "\\sysinternals\\", "\\windows kits\\",
+        # Sysinternals tools extracted to user directories
+        "\\autoruns\\", "\\procmon\\", "\\procexp\\",
+        "\\sysmon\\", "\\tcpview\\", "\\process monitor\\",
     )
     chm_risk = RiskLevel.INFO if any(d in path_lower for d in _SAFE_CHM_DIRS) else RiskLevel.HIGH
     return Finding(

@@ -343,6 +343,229 @@ def _scan_powershell_log() -> List[Finding]:
     return findings
 
 
+def _run_cmd(cmd: List[str], timeout: int = 10) -> str:
+    """Run a command and return stdout. Returns empty string on failure."""
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout,
+            shell=False, creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        return result.stdout.strip()
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        return ""
+
+
+def _scan_log_tampering() -> List[Finding]:
+    """Detect log tampering and security monitoring gaps.
+
+    Checks:
+      1. Security log size anomaly (near-empty = recently cleared)
+      2. PowerShell ScriptBlock/Module logging status
+      3. Sysmon service status
+      4. Windows Event Log service status
+      5. Critical log channel enabled status
+    """
+    findings = []
+
+    # ---- CHECK 1: Security log size anomaly ----
+    try:
+        output = _run_cmd(["wevtutil", "gli", "Security"])
+        # Parse "fileSize: 12345" and "maxSize: 67890"
+        file_size = 0
+        max_size = 0
+        for line in output.splitlines():
+            line_s = line.strip().lower()
+            if line_s.startswith("filesize:"):
+                file_size = int(line_s.split(":")[-1].strip())
+            elif line_s.startswith("maxsize:"):
+                max_size = int(line_s.split(":")[-1].strip())
+
+        if max_size > 0 and file_size < 1_048_576 and max_size >= 20_971_520:
+            # Log < 1MB but max is >= 20MB → suspicious
+            finding = Finding(
+                module="Event Log Scanner",
+                risk=RiskLevel.MEDIUM,
+                title="Security log anomaly: near-empty log file",
+                description=(
+                    f"Security event log is only {file_size // 1024}KB "
+                    f"but max size is {max_size // (1024*1024)}MB. "
+                    "This may indicate the log was recently cleared."
+                ),
+                details={
+                    "file_size_bytes": file_size,
+                    "max_size_bytes": max_size,
+                    "check": "Log size anomaly",
+                },
+                mitre_id="T1070.001",
+                remediation=(
+                    "Investigate if the Security log was recently cleared. "
+                    "Check Event ID 1102 for audit log clear events."
+                ),
+            )
+            findings.append(finding)
+            print_finding(finding)
+    except Exception:
+        pass
+
+    # ---- CHECK 2: PowerShell logging status ----
+    try:
+        import winreg
+        _ps_checks = [
+            (
+                r"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging",
+                "EnableScriptBlockLogging",
+                "PowerShell ScriptBlock Logging",
+            ),
+            (
+                r"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging",
+                "EnableModuleLogging",
+                "PowerShell Module Logging",
+            ),
+        ]
+        for reg_path, value_name, display_name in _ps_checks:
+            try:
+                key = winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ
+                )
+                val, _ = winreg.QueryValueEx(key, value_name)
+                winreg.CloseKey(key)
+                if val == 0:
+                    finding = Finding(
+                        module="Event Log Scanner",
+                        risk=RiskLevel.MEDIUM,
+                        title=f"{display_name} disabled",
+                        description=(
+                            f"{display_name} is explicitly disabled via GPO. "
+                            "Attackers disable logging to evade detection."
+                        ),
+                        details={
+                            "registry_path": f"HKLM\\{reg_path}",
+                            "value": value_name,
+                            "current_value": val,
+                        },
+                        mitre_id="T1562.001",
+                        remediation=(
+                            f"Enable {display_name} via Group Policy or registry: "
+                            f"set {value_name} = 1."
+                        ),
+                    )
+                    findings.append(finding)
+                    print_finding(finding)
+            except FileNotFoundError:
+                # Key doesn't exist → not configured via GPO → INFO
+                finding = Finding(
+                    module="Event Log Scanner",
+                    risk=RiskLevel.INFO,
+                    title=f"{display_name} not configured",
+                    description=(
+                        f"{display_name} is not configured via Group Policy. "
+                        "Consider enabling it for better visibility."
+                    ),
+                    details={
+                        "registry_path": f"HKLM\\{reg_path}",
+                        "status": "Not configured",
+                    },
+                    mitre_id="T1562.001",
+                    remediation=f"Enable {display_name} via Group Policy.",
+                )
+                findings.append(finding)
+                print_finding(finding)
+            except PermissionError:
+                pass
+    except ImportError:
+        pass
+
+    # ---- CHECK 3: Sysmon service status ----
+    for svc_name in ("sysmon", "sysmon64"):
+        output = _run_cmd(["sc", "query", svc_name])
+        if "RUNNING" in output:
+            break
+        elif "STOPPED" in output or "PAUSED" in output:
+            finding = Finding(
+                module="Event Log Scanner",
+                risk=RiskLevel.MEDIUM,
+                title=f"Sysmon service stopped: {svc_name}",
+                description=(
+                    "Sysmon is installed but not running. "
+                    "Attackers stop Sysmon to blind endpoint visibility."
+                ),
+                details={"service": svc_name, "status": "Stopped/Paused"},
+                mitre_id="T1562.001",
+                remediation=f"Start Sysmon: sc start {svc_name}",
+            )
+            findings.append(finding)
+            print_finding(finding)
+            break
+    else:
+        # Neither sysmon nor sysmon64 found → INFO recommendation
+        finding = Finding(
+            module="Event Log Scanner",
+            risk=RiskLevel.INFO,
+            title="Sysmon not installed",
+            description=(
+                "Sysmon is not installed on this endpoint. Sysmon provides "
+                "detailed process, network, and file monitoring."
+            ),
+            details={"status": "Not installed"},
+            mitre_id="T1562.001",
+            remediation=(
+                "Install Sysmon from Microsoft Sysinternals for enhanced "
+                "endpoint visibility: https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon"
+            ),
+        )
+        findings.append(finding)
+        print_finding(finding)
+
+    # ---- CHECK 4: Windows Event Log service ----
+    output = _run_cmd(["sc", "query", "EventLog"])
+    if output and "RUNNING" not in output:
+        finding = Finding(
+            module="Event Log Scanner",
+            risk=RiskLevel.CRITICAL,
+            title="Windows Event Log service not running",
+            description=(
+                "The Windows Event Log service is not in RUNNING state. "
+                "No security events are being recorded."
+            ),
+            details={"service": "EventLog", "output": output[:200]},
+            mitre_id="T1562.002",
+            remediation="Start the Event Log service immediately: sc start EventLog",
+        )
+        findings.append(finding)
+        print_finding(finding)
+
+    # ---- CHECK 5: Critical log channels enabled ----
+    _channels = [
+        ("Security", "Security event log"),
+        ("Microsoft-Windows-PowerShell/Operational", "PowerShell operational log"),
+    ]
+    for channel, desc in _channels:
+        output = _run_cmd(["wevtutil", "gl", channel])
+        if output:
+            enabled = True
+            for line in output.splitlines():
+                if line.strip().lower().startswith("enabled:"):
+                    enabled = "true" in line.lower()
+                    break
+            if not enabled:
+                finding = Finding(
+                    module="Event Log Scanner",
+                    risk=RiskLevel.HIGH,
+                    title=f"Log channel disabled: {channel}",
+                    description=(
+                        f"{desc} is disabled. Attackers disable log channels "
+                        "to prevent detection."
+                    ),
+                    details={"channel": channel, "enabled": False},
+                    mitre_id="T1562.002",
+                    remediation=f"Enable the channel: wevtutil sl {channel} /e:true",
+                )
+                findings.append(finding)
+                print_finding(finding)
+
+    return findings
+
+
 def scan() -> List[Finding]:
     """Run the event log scanner and return findings."""
     print_section("EVENT LOG SCANNER - Context-Aware Security Event Analysis")
@@ -356,6 +579,9 @@ def scan() -> List[Finding]:
 
     print("  [i] Scanning PowerShell event log...")
     findings.extend(_scan_powershell_log())
+
+    print("  [i] Checking log tampering indicators...")
+    findings.extend(_scan_log_tampering())
 
     print(f"  [i] Event log scan complete. {len(findings)} findings.")
     return findings

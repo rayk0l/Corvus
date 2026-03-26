@@ -61,6 +61,112 @@ IOC_FEEDS: List[Dict] = [
         "ioc_type": "Malicious Hashes (SHA256)",
         "parser": "_parse_plain_lines",
     },
+    # ---- Additional IP feeds (merge into bad_ips.txt) ----
+    {
+        "name": "SSL Blacklist (abuse.ch)",
+        "url": "https://sslbl.abuse.ch/blacklist/sslipblacklist.txt",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "C2 Intel Feeds (drb-ra)",
+        "url": "https://raw.githubusercontent.com/drb-ra/C2IntelFeeds/master/feeds/IPC2s-30day.csv",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_c2intel_csv",
+    },
+    # ---- C2-Tracker: ALL C2 framework IPs (47 frameworks in one file) ----
+    # Cobalt Strike, Havoc, Metasploit, Sliver, Mythic, Brute Ratel,
+    # AsyncRAT, njRAT, Quasar, Remcos, ShadowPad, and 36 more.
+    {
+        "name": "C2-Tracker All Frameworks",
+        "url": "https://raw.githubusercontent.com/montysecurity/C2-Tracker/main/data/all.txt",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_plain_lines",
+    },
+    # ---- High-quality IP feeds ----
+    {
+        "name": "Proofpoint ET Compromised",
+        "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "CINSscore Bad IPs",
+        "url": "https://cinsscore.com/list/ci-badguys.txt",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "DigitalSide Latest IPs",
+        "url": "https://osint.digitalside.it/Threat-Intel/lists/latestips.txt",
+        "target": "bad_ips.txt",
+        "ioc_type": "Malicious IPs",
+        "parser": "_parse_plain_lines",
+    },
+    # ---- Additional domain feeds (merge into bad_domains.txt) ----
+    {
+        "name": "OpenPhish",
+        "url": "https://openphish.com/feed.txt",
+        "target": "bad_domains.txt",
+        "ioc_type": "Malicious Domains",
+        "parser": "_parse_urlhaus_domains",
+    },
+    {
+        "name": "ThreatFox Domains",
+        "url": "https://threatfox.abuse.ch/downloads/hostfile/",
+        "target": "bad_domains.txt",
+        "ioc_type": "Malicious Domains",
+        "parser": "_parse_hostfile",
+    },
+    {
+        "name": "Phishing Army",
+        "url": "https://phishing.army/download/phishing_army_blocklist.txt",
+        "target": "bad_domains.txt",
+        "ioc_type": "Malicious Domains",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "DigitalSide Domains",
+        "url": "https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt",
+        "target": "bad_domains.txt",
+        "ioc_type": "Malicious Domains",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "threatview.io Domains",
+        "url": "https://threatview.io/Downloads/DOMAIN-High-Confidence-Feed.txt",
+        "target": "bad_domains.txt",
+        "ioc_type": "Malicious Domains",
+        "parser": "_parse_plain_lines",
+    },
+    # ---- Additional hash feeds (merge into bad_hashes.txt) ----
+    {
+        "name": "Botvrij SHA256",
+        "url": "https://www.botvrij.eu/data/ioclist.sha256",
+        "target": "bad_hashes.txt",
+        "ioc_type": "Malicious Hashes (SHA256)",
+        "parser": "_parse_plain_lines",
+    },
+    {
+        "name": "threatview.io SHA",
+        "url": "https://threatview.io/Downloads/SHA-HASH-FEED.txt",
+        "target": "bad_hashes.txt",
+        "ioc_type": "Malicious Hashes (SHA256)",
+        "parser": "_parse_plain_lines",
+    },
+    # ---- Tor Exit Nodes (separate file) ----
+    {
+        "name": "Tor Exit Nodes",
+        "url": "https://www.dan.me.uk/torlist/?exit",
+        "target": "tor_exits.txt",
+        "ioc_type": "Tor Exit Nodes",
+        "parser": "_parse_plain_lines",
+    },
 ]
 
 _TIMEOUT = 30  # seconds per HTTP request
@@ -97,9 +203,27 @@ YARA_FEEDS: List[Dict] = [
         },
         "exclude_prefixes": ("thor-", "thor_"),
     },
+    {
+        "name": "Elastic protections-artifacts",
+        "url": "https://github.com/elastic/protections-artifacts/archive/refs/heads/main.zip",
+        "source_subdir": "protections-artifacts-main/yara/rules",
+        "target_subdir": "community/elastic",
+        "include_prefixes": (),   # empty = accept ALL .yar files
+        "exclude_files": set(),
+        "exclude_prefixes": (),
+    },
+    {
+        "name": "ReversingLabs YARA",
+        "url": "https://github.com/reversinglabs/reversinglabs-yara-rules/archive/refs/heads/develop.zip",
+        "source_subdir": "reversinglabs-yara-rules-develop/yara",
+        "target_subdir": "community/reversinglabs",
+        "include_prefixes": (),   # empty = accept ALL .yar files
+        "exclude_files": set(),
+        "exclude_prefixes": (),
+    },
 ]
 
-_YARA_TIMEOUT = 90  # seconds — ZIP download is larger than text feeds
+_YARA_TIMEOUT = 120  # seconds — ZIP download is larger than text feeds
 
 
 # Metadata header written at the top of each IOC file after update
@@ -149,10 +273,53 @@ def _parse_urlhaus_domains(raw: str) -> Set[str]:
     return domains
 
 
+def _parse_hostfile(raw: str) -> Set[str]:
+    """Parse hosts-file format → extract domains.
+
+    Format: ``127.0.0.1  malicious-domain.com`` (one per line).
+    Used by ThreatFox hostfile export.
+    """
+    domains: Set[str] = set()
+    _SKIP = {"localhost", "localhost.localdomain", "broadcasthost", "local",
+             "ip6-localhost", "ip6-loopback", "ip6-localnet"}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            domain = parts[1].lower().strip(".")
+            if domain and domain not in _SKIP and "." in domain:
+                domains.add(domain)
+    return domains
+
+
+def _parse_c2intel_csv(raw: str) -> Set[str]:
+    """Parse C2IntelFeeds CSV → extract IP column.
+
+    Format: ip,port,framework,first_seen,last_seen (first line = header).
+    Validates each entry looks like an IPv4 address.
+    """
+    entries: Set[str] = set()
+    lines = raw.splitlines()
+    for line in lines[1:]:  # skip header row
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(",")
+        if parts:
+            ip = parts[0].strip()
+            if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+                entries.add(ip)
+    return entries
+
+
 # Dispatch table (avoids eval)
 _PARSERS = {
     "_parse_plain_lines": _parse_plain_lines,
     "_parse_urlhaus_domains": _parse_urlhaus_domains,
+    "_parse_hostfile": _parse_hostfile,
+    "_parse_c2intel_csv": _parse_c2intel_csv,
 }
 
 
@@ -364,10 +531,157 @@ def _fetch_feed(url: str, timeout: int = _TIMEOUT) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# API-Key Feed Helpers
+# ---------------------------------------------------------------------------
+
+def _fetch_threatfox_full(auth_key: str, ioc_dir: str) -> Dict[str, Set[str]]:
+    """Download ThreatFox full CSV export and split by IOC type.
+
+    Returns dict mapping target files to parsed entry sets::
+
+        {"bad_ips.txt": {ip1, ip2, ...},
+         "bad_domains.txt": {d1, d2, ...},
+         "bad_hashes.txt": {h1, h2, ...}}
+    """
+    url = f"https://threatfox-api.abuse.ch/v2/files/exports/{auth_key}/full.csv.zip"
+    result: Dict[str, Set[str]] = {
+        "bad_ips.txt": set(),
+        "bad_domains.txt": set(),
+        "bad_hashes.txt": set(),
+    }
+
+    try:
+        ctx = ssl.create_default_context()
+        req = Request(url, headers={"User-Agent": _USER_AGENT})
+        with urlopen(req, timeout=_YARA_TIMEOUT, context=ctx) as resp:
+            zip_bytes = resp.read()
+    except (URLError, OSError, ValueError) as e:
+        print(f"  [!] ThreatFox full export failed: {e}")
+        return result
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            # ZIP contains a single CSV file
+            csv_names = [n for n in zf.namelist() if n.endswith(".csv")]
+            if not csv_names:
+                print("  [!] ThreatFox ZIP: no CSV found")
+                return result
+            raw = zf.read(csv_names[0]).decode("utf-8", errors="replace")
+    except (zipfile.BadZipFile, KeyError, OSError) as e:
+        print(f"  [!] ThreatFox ZIP extraction error: {e}")
+        return result
+
+    # CSV columns: ioc_id,date,ioc_type,ioc_value,threat_type,
+    #              fk_malware,malware_alias,malware_malpedia,
+    #              confidence_level,first_seen,last_seen,reporter,tags
+    for line in raw.splitlines()[1:]:  # skip header
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # CSV may have quoted fields; simple split works for ioc_type/ioc_value
+        parts = line.split(",", 4)
+        if len(parts) < 4:
+            continue
+        ioc_type = parts[2].strip().strip('"').lower()
+        ioc_value = parts[3].strip().strip('"').lower()
+
+        if not ioc_value:
+            continue
+
+        if ioc_type == "ip:port":
+            # Extract just the IP (strip :port)
+            ip = ioc_value.split(":")[0]
+            if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+                result["bad_ips.txt"].add(ip)
+        elif ioc_type == "domain":
+            if "." in ioc_value and not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ioc_value):
+                result["bad_domains.txt"].add(ioc_value)
+        elif ioc_type in ("sha256_hash",):
+            if len(ioc_value) == 64:
+                result["bad_hashes.txt"].add(ioc_value)
+        elif ioc_type == "url":
+            try:
+                host = urlparse(ioc_value).hostname
+                if host and "." in host:
+                    host = host.lower().strip(".")
+                    if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host):
+                        result["bad_domains.txt"].add(host)
+            except Exception:
+                pass
+
+    return result
+
+
+def _fetch_pulsedive_feed(api_key: str, ioc_dir: str) -> Dict[str, Set[str]]:
+    """Download Pulsedive IOC feed and split by type.
+
+    Returns dict mapping target files to parsed entry sets.
+    Only includes indicators with risk >= medium.
+    """
+    result: Dict[str, Set[str]] = {
+        "bad_ips.txt": set(),
+        "bad_domains.txt": set(),
+        "bad_hashes.txt": set(),
+    }
+
+    # Pulsedive explore API — get recent high-risk IOCs
+    url = (
+        f"https://pulsedive.com/api/explore.php?"
+        f"q=risk%3Ahigh+OR+risk%3Acritical&limit=1000"
+        f"&pretty=1&key={api_key}"
+    )
+
+    try:
+        ctx = ssl.create_default_context()
+        req = Request(url, headers={"User-Agent": _USER_AGENT})
+        with urlopen(req, timeout=60, context=ctx) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except (URLError, OSError, ValueError) as e:
+        print(f"  [!] Pulsedive feed failed: {e}")
+        return result
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"  [!] Pulsedive JSON parse error: {e}")
+        return result
+
+    # Response: {"results": [{"indicator": "...", "type": "ip|domain|url|hash", "risk": "..."}]}
+    results_list = data.get("results", [])
+    if not results_list:
+        return result
+
+    for entry in results_list:
+        indicator = entry.get("indicator", "").lower().strip()
+        ioc_type = entry.get("type", "").lower()
+
+        if not indicator:
+            continue
+
+        if ioc_type == "ip":
+            if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", indicator):
+                result["bad_ips.txt"].add(indicator)
+        elif ioc_type == "domain":
+            if "." in indicator:
+                result["bad_domains.txt"].add(indicator)
+        elif ioc_type == "url":
+            try:
+                host = urlparse(indicator).hostname
+                if host and "." in host:
+                    result["bad_domains.txt"].add(host.lower().strip("."))
+            except Exception:
+                pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def update_all_iocs(ioc_dir: Optional[str] = None) -> Dict:
+def update_all_iocs(ioc_dir: Optional[str] = None,
+                     threatfox_key: Optional[str] = None,
+                     pulsedive_key: Optional[str] = None) -> Dict:
     """Fetch all IOC feeds, merge with existing files, and write back.
 
     Args:
@@ -396,59 +710,76 @@ def update_all_iocs(ioc_dir: Optional[str] = None) -> Dict:
         "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
+    # ---- Two-phase approach: group feeds by target file ----
+    # Multiple feeds can target the same file (e.g., Feodo + SSL BL → bad_ips.txt).
+    # Phase 1: fetch + parse all feeds, accumulate per target.
+    # Phase 2: merge + write once per target with combined sources.
+    from collections import defaultdict
+    target_groups: Dict[str, list] = defaultdict(list)
     for feed in IOC_FEEDS:
-        filepath = os.path.join(ioc_dir, feed["target"])
-        source_name = feed["name"]
+        target_groups[feed["target"]].append(feed)
 
-        print(f"  [*] Fetching {source_name}...")
+    for target_file, feeds in target_groups.items():
+        filepath = os.path.join(ioc_dir, target_file)
 
-        # 1. Read existing entries
+        # 1. Read existing entries ONCE per target file
         existing, _ = _read_existing_entries(filepath)
         before_count = len(existing)
-
-        # 2. Preserve manual entry blocks
         manual_block = _read_manual_comments(filepath)
 
-        # 3. Fetch remote feed
-        raw = _fetch_feed(feed["url"])
-        if raw is None:
-            results["failed"].append({
-                "file": feed["target"],
-                "source": source_name,
-                "error": "Network error or timeout",
-            })
-            continue
+        # 2. Fetch + parse all feeds for this target
+        accumulated: Set[str] = set()
+        successful_sources: List[str] = []
+        ioc_type = feeds[0]["ioc_type"]
 
-        # 4. Parse fetched entries
-        parser_fn = _PARSERS[feed["parser"]]
-        new_entries = parser_fn(raw)
+        for feed in feeds:
+            source_name = feed["name"]
+            print(f"  [*] Fetching {source_name}...")
 
-        if not new_entries:
-            print(f"  [!] {source_name}: no entries parsed (empty feed?)")
-            results["failed"].append({
-                "file": feed["target"],
-                "source": source_name,
-                "error": "Empty feed — 0 entries parsed",
-            })
-            continue
+            raw = _fetch_feed(feed["url"])
+            if raw is None:
+                results["failed"].append({
+                    "file": target_file,
+                    "source": source_name,
+                    "error": "Network error or timeout",
+                })
+                continue
 
-        # 5. Merge: union of existing + new
-        merged = existing | new_entries
+            parser_fn = _PARSERS[feed["parser"]]
+            new_entries = parser_fn(raw)
+
+            if not new_entries:
+                print(f"  [!] {source_name}: no entries parsed (empty feed?)")
+                results["failed"].append({
+                    "file": target_file,
+                    "source": source_name,
+                    "error": "Empty feed — 0 entries parsed",
+                })
+                continue
+
+            print(f"  [i] {source_name}: {len(new_entries)} entries fetched")
+            accumulated |= new_entries
+            successful_sources.append(source_name)
+
+        if not accumulated and not existing:
+            continue  # nothing to write
+
+        # 3. Merge and write ONCE per target
+        merged = existing | accumulated
         after_count = len(merged)
 
-        # 6. Write back
-        sources_str = f"{source_name} + manual"
-        _write_ioc_file(filepath, merged, feed["ioc_type"], sources_str, manual_block)
+        sources_str = " + ".join(successful_sources + ["manual"])
+        _write_ioc_file(filepath, merged, ioc_type, sources_str, manual_block)
 
         added = after_count - before_count
-        print(f"  [+] {feed['target']:<20}: {before_count} → {after_count} entries (+{added} new)")
+        print(f"  [+] {target_file:<20}: {before_count} → {after_count} entries (+{added} new)")
 
         results["updated"].append({
-            "file": feed["target"],
+            "file": target_file,
             "before": before_count,
             "after": after_count,
             "added": added,
-            "source": source_name,
+            "source": " + ".join(successful_sources),
         })
 
     # ---- JSON-based feeds (CISA KEV → CVE database) ----
@@ -485,6 +816,55 @@ def update_all_iocs(ioc_dir: Optional[str] = None) -> Dict:
                 "source": source_name,
                 "error": str(e),
             })
+
+    # ---- API-Key Feeds (ThreatFox, Pulsedive) ----
+    # CLI keys take precedence over config.json
+    from scanner_core.config import ScanConfig
+    _cfg = ScanConfig()
+    _cfg.load()
+    _ioc_cfg = _cfg._data.get("ioc_feeds", {})
+    _tf_key = threatfox_key or _ioc_cfg.get("threatfox_auth_key", "")
+    _pd_key = pulsedive_key or _ioc_cfg.get("pulsedive_api_key", "")
+
+    api_feed_iocs: Dict[str, Set[str]] = {}
+
+    if _tf_key:
+        print(f"\n  [*] Fetching ThreatFox full export (API key)...")
+        tf_result = _fetch_threatfox_full(_tf_key, ioc_dir)
+        for target, entries in tf_result.items():
+            if entries:
+                api_feed_iocs.setdefault(target, set()).update(entries)
+                print(f"  [i] ThreatFox → {target}: {len(entries)} entries")
+    else:
+        print(f"\n  [i] ThreatFox: auth key not configured, skipping")
+
+    if _pd_key:
+        print(f"  [*] Fetching Pulsedive feed (API key)...")
+        pd_result = _fetch_pulsedive_feed(_pd_key, ioc_dir)
+        for target, entries in pd_result.items():
+            if entries:
+                api_feed_iocs.setdefault(target, set()).update(entries)
+                print(f"  [i] Pulsedive → {target}: {len(entries)} entries")
+    else:
+        print(f"  [i] Pulsedive: API key not configured, skipping")
+
+    # Merge API-key IOCs into existing files
+    for target, new_entries in api_feed_iocs.items():
+        if not new_entries:
+            continue
+        filepath = os.path.join(ioc_dir, target)
+        existing, _ = _read_existing_entries(filepath)
+        before = len(existing)
+        merged = existing | new_entries
+        after = len(merged)
+        added = after - before
+        if added > 0:
+            manual_block = _read_manual_comments(filepath)
+            # Read current header sources and append API sources
+            _write_ioc_file(filepath, merged,
+                            "Enriched IOCs", "API feeds + existing",
+                            manual_block)
+            print(f"  [+] API enrichment → {target}: +{added} new entries")
 
     # ---- YARA Community Rules ----
     print(f"\n  {'─'*55}")
@@ -525,6 +905,7 @@ def get_ioc_info(ioc_dir: Optional[str] = None) -> List[Dict]:
         ("bad_ips.txt", "Malicious IPs"),
         ("bad_domains.txt", "Malicious Domains"),
         ("bad_hashes.txt", "Malicious Hashes"),
+        ("tor_exits.txt", "Tor Exit Nodes"),
     ]
 
     for filename, default_type in text_files:
@@ -587,8 +968,12 @@ def get_ioc_info(ioc_dir: Optional[str] = None) -> List[Dict]:
             elif "signatures" in data:
                 entry["count"] = len(data.get("signatures", []))
                 entry["count"] += len(data.get("memory_signatures", []))
-        except (FileNotFoundError, json.JSONDecodeError):
-            entry["updated"] = "File not found / error"
+        except FileNotFoundError:
+            entry["updated"] = "File not found"
+        except json.JSONDecodeError as e:
+            entry["updated"] = f"JSON error: {e.msg}"
+        except Exception as e:
+            entry["updated"] = f"Error: {type(e).__name__}"
         info_list.append(entry)
 
     return info_list
@@ -701,8 +1086,9 @@ def _extract_yara_from_zip(zip_bytes: bytes, feed: Dict,
                 skipped += 1
                 continue
 
-            # Include only matching prefixes (apt_*, crime_*)
-            if not any(filename.startswith(p) for p in include_prefixes):
+            # Include only matching prefixes (apt_*, crime_*).
+            # Empty include_prefixes = accept ALL .yar files.
+            if include_prefixes and not any(filename.startswith(p) for p in include_prefixes):
                 skipped += 1
                 continue
 

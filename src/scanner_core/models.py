@@ -53,20 +53,26 @@ class Finding:
 # Risk Score Calculation (single source of truth)
 # ---------------------------------------------------------------------------
 def calculate_risk_score(findings: list) -> int:
-    """
-    Calculate a security risk score (0-100).
+    """Calculate a security risk score (0-100).
+
     100 = perfectly clean system, 0 = critically compromised.
 
-    Deductions: CRITICAL=-15, HIGH=-8, MEDIUM=-3, INFO=-1
+    - INFO = 0 deduction (informational only)
+    - Per-module cap = 30 (one noisy module can't destroy score)
+    - CRITICAL=-15, HIGH=-8, MEDIUM=-3
     """
-    score = 100
+    MODULE_CAP = 30
+    module_deductions: dict = {}
     for f in findings:
         if f.risk == RiskLevel.CRITICAL:
-            score -= 15
+            deduction = 15
         elif f.risk == RiskLevel.HIGH:
-            score -= 8
+            deduction = 8
         elif f.risk == RiskLevel.MEDIUM:
-            score -= 3
-        elif f.risk == RiskLevel.INFO:
-            score -= 1
-    return max(0, min(100, score))
+            deduction = 3
+        else:
+            deduction = 0
+        module_deductions[f.module] = module_deductions.get(f.module, 0) + deduction
+
+    total = sum(min(d, MODULE_CAP) for d in module_deductions.values())
+    return max(0, min(100, 100 - total))

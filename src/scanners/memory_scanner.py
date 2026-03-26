@@ -71,6 +71,7 @@ JIT_PROCESSES = {
     "discord.exe", "slack.exe", "teams.exe", "msteams.exe",
     "notion.exe", "spotify.exe", "figma.exe", "obsidian.exe",
     "whatsapp.exe", "telegram.exe", "signal.exe", "postman.exe",
+    "bitwarden.exe",
     # .NET JIT
     "powershell.exe", "pwsh.exe", "dotnet.exe",
     # Java JIT

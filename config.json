@@ -61,11 +61,19 @@
     },
 
     "online": {
-        "_comment": "Online enrichment (--online flag required). API keys for VirusTotal and AbuseIPDB.",
+        "_comment": "Online enrichment (--online flag required). API keys for VirusTotal, AbuseIPDB, URLScan.io.",
         "enabled": false,
         "vt_api_key": "",
         "abuseipdb_api_key": "",
+        "urlscan_api_key": "",
         "vt_rate_limit_per_min": 4,
         "abuseipdb_rate_limit_per_day": 1000
+    },
+
+    "ioc_feeds": {
+        "_comment": "API keys for IOC feed updates (--update-iocs). Free tiers. Leave empty to skip.",
+        "threatfox_auth_key": "",
+        "pulsedive_api_key": "",
+        "urlscan_api_key": ""
     }
 }

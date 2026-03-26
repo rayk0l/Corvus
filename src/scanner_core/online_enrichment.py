@@ -26,6 +26,7 @@ logger = logging.getLogger("scanner.online_enrichment")
 # ---------------------------------------------------------------------------
 _vt_api_key: str = ""
 _abuseipdb_api_key: str = ""
+_urlscan_api_key: str = ""
 _enabled: bool = False
 
 # Rate limiting
@@ -40,10 +41,12 @@ _abuseipdb_daily_count: int = 0
 # Session caches (cleared on configure)
 _vt_cache: Dict[str, dict] = {}
 _abuseipdb_cache: Dict[str, dict] = {}
+_urlscan_cache: Dict[str, dict] = {}
 
 # Query caps (prevent excessive API usage on large scans)
 _VT_MAX_HASHES: int = 20
 _ABUSEIPDB_MAX_IPS: int = 50
+_URLSCAN_MAX_DOMAINS: int = 30
 
 # Risk ordering (lower = more severe)
 _RISK_ORDER = {
@@ -68,16 +71,18 @@ def configure(online_cfg: dict) -> None:
         online_cfg: dict with keys: vt_api_key, abuseipdb_api_key
                     (from config.json["online"] or CLI args)
     """
-    global _vt_api_key, _abuseipdb_api_key, _enabled
+    global _vt_api_key, _abuseipdb_api_key, _urlscan_api_key, _enabled
     global _vt_daily_count, _abuseipdb_daily_count
 
     _vt_api_key = (online_cfg.get("vt_api_key") or "").strip()
     _abuseipdb_api_key = (online_cfg.get("abuseipdb_api_key") or "").strip()
-    _enabled = bool(_vt_api_key or _abuseipdb_api_key)
+    _urlscan_api_key = (online_cfg.get("urlscan_api_key") or "").strip()
+    _enabled = bool(_vt_api_key or _abuseipdb_api_key or _urlscan_api_key)
 
     # Reset caches and counters for new session
     _vt_cache.clear()
     _abuseipdb_cache.clear()
+    _urlscan_cache.clear()
     _vt_request_times.clear()
     _vt_daily_count = 0
     _abuseipdb_daily_count = 0
@@ -88,6 +93,8 @@ def configure(online_cfg: dict) -> None:
             sources.append("VirusTotal")
         if _abuseipdb_api_key:
             sources.append("AbuseIPDB")
+        if _urlscan_api_key:
+            sources.append("URLScan.io")
         print(f"  [+] Online enrichment configured: {', '.join(sources)}")
     else:
         print("  [i] Online enrichment: no API keys configured")
@@ -109,8 +116,10 @@ def enrich_findings(findings: List[Finding]) -> Optional[dict]:
     summary = {
         "hashes_queried": 0,
         "ips_queried": 0,
+        "domains_queried": 0,
         "vt_hits": 0,
         "abuseipdb_hits": 0,
+        "urlscan_hits": 0,
         "risk_upgrades": 0,
     }
 
@@ -167,6 +176,38 @@ def enrich_findings(findings: List[Finding]) -> Optional[dict]:
                     if _maybe_upgrade_risk_abuseipdb(f, abuseipdb_result):
                         summary["risk_upgrades"] += 1
             summary["ips_queried"] += 1
+
+    # --- URLScan.io Domain Enrichment ---
+    if _urlscan_api_key:
+        domain_findings: Dict[str, List[Finding]] = {}
+        for f in findings:
+            # Extract domains from DNS Scanner and Network Scanner findings
+            domain = (
+                f.details.get("domain")
+                or f.details.get("queried_domain")
+                or f.details.get("resolved_domain")
+            )
+            if domain and isinstance(domain, str) and "." in domain:
+                domain = domain.lower().strip(".")
+                domain_findings.setdefault(domain, []).append(f)
+
+        if domain_findings:
+            sorted_domains = _risk_priority(
+                domain_findings.items()
+            )[:_URLSCAN_MAX_DOMAINS]
+            print(f"  [*] URLScan.io: querying {len(sorted_domains)} unique domain(s)...")
+
+            for domain, related_findings in sorted_domains:
+                urlscan_result = _urlscan_lookup(domain)
+                if urlscan_result and urlscan_result.get("urlscan_malicious"):
+                    summary["urlscan_hits"] += 1
+                    for f in related_findings:
+                        f.details["urlscan_malicious"] = urlscan_result["urlscan_malicious"]
+                        f.details["urlscan_score"] = urlscan_result["urlscan_score"]
+                        f.details["urlscan_link"] = urlscan_result["urlscan_link"]
+                        if _maybe_upgrade_risk_urlscan(f, urlscan_result):
+                            summary["risk_upgrades"] += 1
+                summary["domains_queried"] += 1
 
     return summary
 
@@ -371,6 +412,74 @@ def _abuseipdb_lookup(ip: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
+# URLScan.io API
+# ---------------------------------------------------------------------------
+_URLSCAN_RATE_DELAY: float = 0.5  # 120 req/min ≈ 2 per sec, stay safe
+
+def _urlscan_lookup(domain: str) -> Optional[dict]:
+    """Query URLScan.io search API for domain reputation.
+
+    Returns enrichment dict or None on error. Results are cached.
+    """
+    if domain in _urlscan_cache:
+        return _urlscan_cache[domain]
+
+    time.sleep(_URLSCAN_RATE_DELAY)
+
+    url = f"https://urlscan.io/api/v1/search/?q=domain:{domain}&size=1"
+    try:
+        ctx = ssl.create_default_context()
+        req = Request(url, headers={
+            "API-Key": _urlscan_api_key,
+            "User-Agent": _USER_AGENT,
+        })
+
+        with urlopen(req, timeout=_TIMEOUT, context=ctx) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+
+        results = raw.get("results", [])
+        if not results:
+            _urlscan_cache[domain] = None
+            return None
+
+        # Take the most recent scan result
+        latest = results[0]
+        verdicts = latest.get("verdicts", {}).get("overall", {})
+        is_malicious = verdicts.get("malicious", False)
+        score = verdicts.get("score", 0)
+        page = latest.get("page", {})
+        scan_url = page.get("url", "")
+        task_uuid = latest.get("task", {}).get("uuid", "")
+
+        result = {
+            "urlscan_malicious": is_malicious,
+            "urlscan_score": score,
+            "urlscan_url": scan_url,
+            "urlscan_link": f"https://urlscan.io/result/{task_uuid}/" if task_uuid else "",
+        }
+
+        _urlscan_cache[domain] = result
+        return result
+
+    except HTTPError as e:
+        if e.code == 429:
+            logger.warning("URLScan.io rate limit hit for %s", domain)
+        elif e.code == 401:
+            logger.error("URLScan.io: invalid API key")
+        else:
+            logger.error("URLScan.io HTTP %d for %s", e.code, domain)
+        return None
+
+    except (URLError, TimeoutError, OSError) as e:
+        logger.error("URLScan.io connection error for %s: %s", domain, e)
+        return None
+
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.error("URLScan.io parse error for %s: %s", domain, e)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Risk upgrade logic
 # ---------------------------------------------------------------------------
 def _maybe_upgrade_risk_vt(finding: Finding, vt_result: dict) -> bool:
@@ -404,6 +513,17 @@ def _maybe_upgrade_risk_abuseipdb(finding: Finding, result: dict) -> bool:
         return False
 
     return _apply_upgrade(finding, new_risk, "abuseipdb")
+
+
+def _maybe_upgrade_risk_urlscan(finding: Finding, result: dict) -> bool:
+    """Upgrade finding risk based on URLScan.io verdict. Never downgrade."""
+    if result.get("urlscan_malicious"):
+        score = result.get("urlscan_score", 0)
+        if score > 70:
+            return _apply_upgrade(finding, RiskLevel.CRITICAL, "urlscan.io")
+        elif score > 50:
+            return _apply_upgrade(finding, RiskLevel.HIGH, "urlscan.io")
+    return False
 
 
 def _apply_upgrade(finding: Finding, new_risk: RiskLevel, source: str) -> bool:

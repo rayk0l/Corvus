@@ -11,6 +11,7 @@ from datetime import datetime
 from collections import Counter
 
 from scanner_core.utils import Finding, RiskLevel, calculate_risk_score, is_admin
+from report.html_report import _build_killchain_data, _KILL_CHAIN_ORDER
 
 
 def export(findings: list, output_dir: str, elapsed: float,
@@ -46,6 +47,15 @@ def export(findings: list, output_dir: str, elapsed: float,
             "info": risk_counts.get(RiskLevel.INFO, 0),
         },
         "mitre_techniques": dict(mitre_counts.most_common(20)),
+        "mitre_killchain": {
+            tactic: {
+                "count": td["count"],
+                "max_risk": td["max_risk"].value if td["max_risk"] else None,
+                "techniques": td["techniques"],
+            }
+            for tactic, td in _build_killchain_data(findings).items()
+            if td["count"] > 0
+        },
         "module_timings": module_timings or {},
         "findings": [
             {

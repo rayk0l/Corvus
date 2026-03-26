@@ -207,6 +207,24 @@ notes:
         metavar="KEY",
         help="AbuseIPDB API key (overrides config.json)",
     )
+    parser.add_argument(
+        "--threatfox-key",
+        default=None,
+        metavar="KEY",
+        help="ThreatFox auth key (overrides config.json). Get free at auth.abuse.ch",
+    )
+    parser.add_argument(
+        "--pulsedive-key",
+        default=None,
+        metavar="KEY",
+        help="Pulsedive API key (overrides config.json). Get free at pulsedive.com",
+    )
+    parser.add_argument(
+        "--urlscan-key",
+        default=None,
+        metavar="KEY",
+        help="URLScan.io API key (overrides config.json). Get free at urlscan.io",
+    )
     return parser
 
 
@@ -481,7 +499,10 @@ def main():
         from ioc_updater import update_all_iocs
         print(f"\n  [*] Corvus IOC + YARA Rule Update")
         print(f"  {'='*55}")
-        results = update_all_iocs()
+        results = update_all_iocs(
+            threatfox_key=args.threatfox_key,
+            pulsedive_key=args.pulsedive_key,
+        )
         print(f"\n  {'─'*55}")
         if results["updated"]:
             print(f"  [+] Successfully updated {len(results['updated'])} IOC file(s)")
@@ -514,6 +535,8 @@ def main():
             online_cfg["vt_api_key"] = args.vt_key
         if args.abuseipdb_key:
             online_cfg["abuseipdb_api_key"] = args.abuseipdb_key
+        if args.urlscan_key:
+            online_cfg["urlscan_api_key"] = args.urlscan_key
         _configure_online(online_cfg)
         print("  [i] Online enrichment: ENABLED")
 
@@ -605,6 +628,20 @@ def main():
             print(f"  [i] AbuseIPDB hits : {enrichment_summary['abuseipdb_hits']}")
             if enrichment_summary["risk_upgrades"] > 0:
                 print(f"  [!] Risk upgrades  : {enrichment_summary['risk_upgrades']} finding(s)")
+
+    # ---- Cross-Module Correlation ----
+    from scanner_core.correlator import correlate
+    correlation_findings = correlate(all_findings)
+    if correlation_findings:
+        print_section("CORRELATION ENGINE")
+        print(f"  [!] {len(correlation_findings)} attack chain(s) detected:")
+        for cf in correlation_findings:
+            print(f"      [{cf.risk.value}] {cf.title}")
+            print_finding(cf)
+        all_findings.extend(correlation_findings)
+    else:
+        print_section("CORRELATION ENGINE")
+        print("  [+] No attack chains detected — no cross-module correlations found.")
 
     # ---- Generate Reports ----
     elapsed = time.time() - start_time

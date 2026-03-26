@@ -19,6 +19,7 @@ from xml.etree import ElementTree as ET
 from scanner_core.utils import (
     Finding, RiskLevel, IOThrottle,
     is_os_native_path, is_known_dev_tool,
+    check_file_signature,
     print_section, print_finding,
 )
 
@@ -81,6 +82,9 @@ _SAFE_AUTHORS = {
     "\\system", "local service", "network service",
     "adobe", "adobe systems", "google", "apple",
 }
+
+# Windows system task path namespace — tasks under this path are OS-native
+_WINDOWS_TASK_NAMESPACE = "\\microsoft\\windows\\"
 
 # Maximum tasks to scan (safety limit)
 _MAX_TASKS = 2000
@@ -178,9 +182,68 @@ def _is_safe_author(author: str) -> bool:
     if not author:
         return False
     author_lower = author.lower().strip()
+    # Windows resource string references like "$(@%SystemRoot%\system32\ClipUp.exe,-100)"
+    # are used by built-in Windows tasks.
+    if author_lower.startswith("$(@%systemroot%"):
+        return True
     for safe in _SAFE_AUTHORS:
         if author_lower == safe or author_lower.startswith(safe + " "):
             return True
+    return False
+
+
+# Known safe task name patterns → expected binary names.
+# Multi-condition: name matches AND binary matches AND binary is signed.
+_KNOWN_SAFE_TASKS: Dict[str, List[str]] = {
+    "zoomupdatetask": ["zoom.exe", "zoominstaller.exe"],
+    "googleupdate": ["googleupdate.exe"],
+    "microsoftedgeupdate": ["msedgeupdate.exe", "microsoftedgeupdate.exe"],
+    "onedrive": ["onedrive.exe", "onedrivestanaloneupdater.exe"],
+    "adobeacrobatupdate": ["adobearm.exe", "armsvc.exe"],
+    "mozillamaintenance": ["maintenanceservice.exe"],
+    "ccleaner": ["ccleaner.exe", "ccleaner64.exe"],
+    "npcapwatchdog": ["checkstatus.bat"],
+}
+
+
+def _is_known_safe_task(task_name: str, task_binary_path: str) -> bool:
+    """Check if scheduled task is a known legitimate application task.
+
+    Requires ALL of:
+      1. Task name matches a known pattern
+      2. Binary name matches expected binary for that pattern
+      3. Binary is signed (or for .bat: parent dir is in Program Files)
+
+    Attacker can rename task to "ZoomUpdateTask" but can't easily
+    fake binary name + valid signature together.
+    """
+    name_lower = task_name.lower()
+    matched_binaries = None
+    for pattern, expected in _KNOWN_SAFE_TASKS.items():
+        if pattern in name_lower:
+            matched_binaries = expected
+            break
+
+    if not matched_binaries:
+        return False
+
+    # Condition 2: binary name matches
+    # Strip surrounding quotes — task XML often wraps paths in quotes
+    clean_path = task_binary_path.strip('"').strip("'")
+    binary_name = os.path.basename(clean_path).lower()
+    if binary_name not in [b.lower() for b in matched_binaries]:
+        return False  # Name matches but binary doesn't — SUSPICIOUS
+
+    # Condition 3: binary is signed or in safe path (.bat exception)
+    if clean_path and os.path.isfile(clean_path):
+        if binary_name.endswith((".bat", ".cmd")):
+            # Scripts can't be signed — check they're in Program Files
+            path_lower = clean_path.lower()
+            return "\\program files\\" in path_lower or "\\program files (x86)\\" in path_lower
+        sig = check_file_signature(clean_path)
+        if sig.get("signed"):
+            return True
+
     return False
 
 
@@ -200,6 +263,31 @@ def _analyze_task(task: Dict) -> List[Finding]:
 
     if not commands:
         return findings
+
+    # Tasks under \Microsoft\Windows\ namespace are OS-native system tasks.
+    # They commonly use hidden flags, LOLBins with elevated privileges, and
+    # resource string authors — all legitimate for Windows maintenance.
+    is_windows_task = _WINDOWS_TASK_NAMESPACE in filepath.lower()
+    if is_windows_task:
+        # Still check for LOLBin + suspicious args (rare but possible hijack)
+        # but skip hidden-only, elevated-LOLBin-only, and author-based flags.
+        _has_suspicious_args = False
+        for cmd_info in commands:
+            full_cmd = f"{cmd_info['command']} {cmd_info['arguments']}".strip()
+            for regex, _, _ in _SUSPICIOUS_ARG_PATTERNS:
+                if regex.search(full_cmd):
+                    _has_suspicious_args = True
+                    break
+            if _has_suspicious_args:
+                break
+        if not _has_suspicious_args:
+            return findings
+
+    # Multi-condition safe check for known third-party tasks.
+    # Requires: name match + binary match + signed.
+    for cmd_info in commands:
+        if _is_known_safe_task(task_name, cmd_info["command"]):
+            return findings
 
     for cmd_info in commands:
         command = cmd_info["command"]

@@ -296,15 +296,25 @@ def _check_composite_devices(usb_devices: List[Dict]) -> List[Finding]:
 def _check_network_adapters(usb_devices: List[Dict]) -> List[Finding]:
     """Check for USB network adapters (potential rogue devices)."""
     findings = []
+    seen_vid_pids: set = set()
     for dev in usb_devices:
         classes = dev.get("usb_classes", set())
         has_network = bool(classes & _USB_CLASS_NETWORK)
 
         if has_network:
+            # Deduplicate by VID/PID — same device with multiple instances
+            vid_pid = dev.get("vid_pid", "")
+            if vid_pid in seen_vid_pids:
+                continue
+            seen_vid_pids.add(vid_pid)
+
             desc = dev.get("device_desc", "").lower()
-            # Skip well-known legitimate adapters
+            # Skip well-known legitimate adapters and serial devices
+            # CDC class 02 covers both serial ports and network adapters;
+            # USB serial devices (e.g., MediaTek debug ports) are not
+            # network adapters.
             if any(k in desc for k in ("bluetooth", "wireless mouse",
-                                        "wireless keyboard")):
+                                        "wireless keyboard", "serial")):
                 continue
 
             findings.append(Finding(

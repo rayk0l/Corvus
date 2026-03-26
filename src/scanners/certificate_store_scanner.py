@@ -160,6 +160,12 @@ TRUSTED_ROOT_ISSUERS = {
     "security communication rootca3",
     "security communication ecc rootca1",
     "secom trust systems co",
+    # VeriSign legacy (issuer strings that don't contain "verisign" substring)
+    "no liability accepted",
+    # Hellenic Academic (Microsoft Root Program member)
+    "hellenic academic and research institutions",
+    # FortiClient / FortiGate VPN CAs (corporate deployments)
+    "forticlient", "fortinet", "fctems",
 }
 
 # Weak signature algorithm OIDs
@@ -567,13 +573,12 @@ def scan() -> List[Finding]:
             # ---- Check 3: Weak signature algorithm ----
             if sig_oid in WEAK_ALGORITHMS:
                 algo_name, default_risk = WEAK_ALGORITHMS[sig_oid]
-                # Context-aware: trusted legacy root CAs with SHA1 are
-                # expected (Windows ships them).  Downgrade SHA1 to INFO.
-                # MD2/MD5 stay HIGH even for trusted CAs (truly obsolete).
+                # Context-aware: trusted legacy root CAs with weak algorithms
+                # are Windows-shipped and cannot be removed by the user.
+                # Downgrade to INFO for all trusted CAs (SHA1, MD5, MD2).
                 risk = default_risk
-                if algo_name.startswith("SHA1"):
-                    if _is_trusted_issuer(issuer) or _is_trusted_issuer(subject):
-                        risk = RiskLevel.INFO
+                if _is_trusted_issuer(issuer) or _is_trusted_issuer(subject):
+                    risk = RiskLevel.INFO
                 finding = Finding(
                     module="Certificate Store Scanner",
                     risk=risk,

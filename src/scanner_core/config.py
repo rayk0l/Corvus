@@ -62,8 +62,14 @@ DEFAULTS = {
         "enabled": False,
         "vt_api_key": "",
         "abuseipdb_api_key": "",
+        "urlscan_api_key": "",
         "vt_rate_limit_per_min": 4,
         "abuseipdb_rate_limit_per_day": 1000,
+    },
+    "ioc_feeds": {
+        "threatfox_auth_key": "",
+        "pulsedive_api_key": "",
+        "urlscan_api_key": "",
     },
 }
 

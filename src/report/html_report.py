@@ -93,6 +93,161 @@ def _highest_risk_color(findings: List[Finding], module_name: str) -> str:
     return "#38bdf8"
 
 
+# ---------------------------------------------------------------------------
+# MITRE ATT&CK Kill Chain Mapping
+# ---------------------------------------------------------------------------
+_KILL_CHAIN_ORDER = [
+    "Reconnaissance", "Resource Development", "Initial Access", "Execution",
+    "Persistence", "Privilege Escalation", "Defense Evasion",
+    "Credential Access", "Discovery", "Lateral Movement", "Collection",
+    "Command and Control", "Exfiltration", "Impact",
+]
+
+# Technique ID → Primary Tactic (some techniques span multiple, we pick primary)
+_MITRE_TACTIC_MAP = {
+    # Initial Access
+    "T1190": "Initial Access", "T1200": "Initial Access",
+    "T1091": "Initial Access", "T1204.002": "Initial Access",
+    # Execution
+    "T1059": "Execution", "T1059.001": "Execution", "T1059.003": "Execution",
+    "T1059.005": "Execution", "T1047": "Execution",
+    "T1218": "Execution", "T1218.001": "Execution", "T1218.005": "Execution",
+    "T1218.010": "Execution", "T1218.011": "Execution",
+    # Persistence
+    "T1053.005": "Persistence", "T1543.003": "Persistence",
+    "T1547.001": "Persistence", "T1547.004": "Persistence",
+    "T1547.005": "Persistence", "T1546.003": "Persistence",
+    "T1546.010": "Persistence", "T1546.012": "Persistence",
+    "T1542.003": "Persistence", "T1137.006": "Persistence",
+    "T1176": "Persistence",
+    # Privilege Escalation
+    "T1055": "Privilege Escalation", "T1055.001": "Privilege Escalation",
+    "T1548.002": "Privilege Escalation",
+    # Defense Evasion
+    "T1027": "Defense Evasion", "T1027.002": "Defense Evasion",
+    "T1036": "Defense Evasion", "T1036.005": "Defense Evasion",
+    "T1140": "Defense Evasion", "T1553.004": "Defense Evasion",
+    "T1553.005": "Defense Evasion", "T1562.001": "Defense Evasion",
+    "T1562.002": "Defense Evasion", "T1562.004": "Defense Evasion",
+    "T1564.003": "Defense Evasion", "T1564.004": "Defense Evasion",
+    "T1574.001": "Defense Evasion", "T1070.001": "Defense Evasion",
+    "T1197": "Defense Evasion", "T1220": "Defense Evasion",
+    # Credential Access
+    "T1003": "Credential Access", "T1003.001": "Credential Access",
+    "T1110": "Credential Access", "T1552.001": "Credential Access",
+    "T1552.002": "Credential Access", "T1552.004": "Credential Access",
+    "T1078.001": "Credential Access",
+    # Discovery
+    "T1082": "Discovery", "T1083": "Discovery",
+    # Lateral Movement
+    "T1021.001": "Lateral Movement",
+    # Collection
+    "T1005": "Collection", "T1052.001": "Collection",
+    # Command and Control
+    "T1071": "Command and Control", "T1071.001": "Command and Control",
+    "T1071.004": "Command and Control", "T1090": "Command and Control",
+    "T1090.003": "Command and Control", "T1105": "Command and Control",
+    "T1568.002": "Command and Control", "T1571": "Command and Control",
+    # Exfiltration
+    "T1041": "Exfiltration",
+    # Impact
+    "T1490": "Impact", "T1565.001": "Impact", "T1542": "Impact",
+    # Account Manipulation → Persistence
+    "T1098": "Persistence", "T1136.001": "Persistence",
+}
+
+
+def _build_killchain_data(findings: List[Finding]) -> Dict:
+    """Map findings to MITRE ATT&CK kill chain tactics.
+
+    Returns dict keyed by tactic name with count, max_risk, and techniques.
+    """
+    tactic_data: Dict[str, Dict] = {}
+    for tactic in _KILL_CHAIN_ORDER:
+        tactic_data[tactic] = {
+            "count": 0,
+            "max_risk": None,
+            "techniques": set(),
+            "findings": [],
+        }
+
+    for f in findings:
+        mid = f.mitre_id
+        if not mid:
+            continue
+        tactic = _MITRE_TACTIC_MAP.get(mid)
+        if not tactic:
+            continue
+        td = tactic_data[tactic]
+        td["count"] += 1
+        td["techniques"].add(mid)
+        if td["max_risk"] is None or f.risk.order < td["max_risk"].order:
+            td["max_risk"] = f.risk
+        if len(td["findings"]) < 3:
+            td["findings"].append(f.title)
+
+    # Convert sets to sorted lists for JSON serialization
+    for td in tactic_data.values():
+        td["techniques"] = sorted(td["techniques"])
+
+    return tactic_data
+
+
+def _build_killchain_section(findings: List[Finding]) -> str:
+    """Build the MITRE ATT&CK Kill Chain HTML visualization."""
+    tactic_data = _build_killchain_data(findings)
+
+    # Find max count for bar scaling
+    max_count = max((td["count"] for td in tactic_data.values()), default=1) or 1
+
+    rows = ""
+    active_count = 0
+    for tactic in _KILL_CHAIN_ORDER:
+        td = tactic_data[tactic]
+        count = td["count"]
+        if count > 0:
+            active_count += 1
+            risk = td["max_risk"]
+            color = risk.color if risk else "#334155"
+            bar_pct = min(100, int((count / max_count) * 100))
+            techs = ", ".join(td["techniques"][:5])
+            tooltip = f'{count} finding(s): {techs}'
+        else:
+            color = "#1e293b"
+            bar_pct = 0
+            tooltip = "No findings"
+
+        rows += f"""
+        <div style="display:flex;align-items:center;margin:4px 0;gap:10px;">
+          <div style="width:180px;font-size:12px;color:#94a3b8;text-align:right;
+                      flex-shrink:0;" title="{_escape_html(tooltip)}">
+            {_escape_html(tactic)}
+          </div>
+          <div style="flex:1;background:#1e293b;border-radius:4px;height:22px;
+                      position:relative;overflow:hidden;">
+            <div style="width:{bar_pct}%;height:100%;background:{color};
+                        border-radius:4px;transition:width 0.3s;"></div>
+            {'<span style="position:absolute;right:6px;top:2px;font-size:11px;color:#e2e8f0;">' + str(count) + '</span>' if count > 0 else ''}
+          </div>
+        </div>"""
+
+    total_findings = sum(td["count"] for td in tactic_data.values())
+    total_techniques = len(set(t for td in tactic_data.values() for t in td["techniques"]))
+
+    return f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-radius:12px;
+                padding:24px;margin:20px 0;">
+      <h2 style="color:#f1f5f9;margin:0 0 6px 0;font-size:18px;">
+        &#9876; MITRE ATT&amp;CK Kill Chain Coverage
+      </h2>
+      <p style="color:#64748b;margin:0 0 16px 0;font-size:13px;">
+        {active_count} / {len(_KILL_CHAIN_ORDER)} tactics active &mdash;
+        {total_techniques} techniques across {total_findings} findings
+      </p>
+      {rows}
+    </div>"""
+
+
 def _build_executive_summary(
     findings: List[Finding],
     risk_score: int,
@@ -459,6 +614,9 @@ def generate(
     # Build executive summary
     exec_summary_html = _build_executive_summary(findings, risk_score, elapsed, module_timings)
 
+    # Build Kill Chain visualization
+    killchain_html = _build_killchain_section(findings)
+
     # Build diff section (if --diff was used)
     diff_html = _build_diff_section(diff_data) if diff_data else ""
 
@@ -494,6 +652,13 @@ def generate(
     for _, display_name, config_key in SCANNER_REGISTRY:
         icon, desc = _MODULE_META.get(config_key, ("🔎", display_name))
         modules.append((display_name, config_key, icon, desc))
+
+    # Add Correlation Engine if it produced findings
+    if any(f.module == "Correlation Engine" for f in findings):
+        modules.insert(0, (
+            "Correlation Engine", "correlation_engine",
+            "🔗", "Cross-Module Attack Chain Detection",
+        ))
 
     # Build module sections
     module_sections = ""
@@ -943,6 +1108,9 @@ def generate(
 
         <!-- Executive Summary -->
         {exec_summary_html}
+
+        <!-- MITRE ATT&CK Kill Chain -->
+        {killchain_html}
 
         <!-- Baseline Comparison (if --diff) -->
         {diff_html}

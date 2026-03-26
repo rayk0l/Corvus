@@ -364,8 +364,8 @@ class TestHighEntropyDetection:
             high_entropy_data += hashlib.sha256(str(i).encode()).digest()
 
         pe = _build_minimal_pe(
-            sections=[{"name": ".rsrc", "raw_size": len(high_entropy_data),
-                       "characteristics": 0x40000040}],
+            sections=[{"name": ".text", "raw_size": len(high_entropy_data),
+                       "characteristics": 0x60000020}],
             section_data={0: high_entropy_data},
         )
         path = _write_temp_pe(pe)
@@ -374,6 +374,26 @@ class TestHighEntropyDetection:
             entropy_findings = [f for f in findings if "High-entropy" in f.title]
             assert len(entropy_findings) == 1
             assert entropy_findings[0].risk == RiskLevel.MEDIUM
+        finally:
+            os.unlink(path)
+
+    def test_rsrc_only_entropy_suppressed(self):
+        """High entropy in .rsrc only (no other suspicious sections) → suppressed."""
+        import hashlib
+        high_entropy_data = b""
+        for i in range(64):
+            high_entropy_data += hashlib.sha256(str(i).encode()).digest()
+
+        pe = _build_minimal_pe(
+            sections=[{"name": ".rsrc", "raw_size": len(high_entropy_data),
+                       "characteristics": 0x40000040}],
+            section_data={0: high_entropy_data},
+        )
+        path = _write_temp_pe(pe)
+        try:
+            findings = _analyze_pe_headers(path)
+            entropy_findings = [f for f in findings if "High-entropy" in f.title]
+            assert len(entropy_findings) == 0, ".rsrc-only entropy should be suppressed"
         finally:
             os.unlink(path)
 

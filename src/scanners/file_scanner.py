@@ -437,10 +437,9 @@ def _scan_single_file(
     if ext in PE_EXTENSIONS:
         try:
             sig_result = check_file_signature(filepath)
-            is_trusted = sig_result.get("trusted", False)
             is_native = is_os_native_path(filepath)
             pe_findings = _analyze_pe_headers(
-                filepath, is_trusted=is_trusted, is_native=is_native,
+                filepath, sig_result=sig_result, is_native=is_native,
             )
             findings.extend(pe_findings)
         except Exception:
@@ -497,9 +496,87 @@ def _calculate_shannon_entropy(data: bytes) -> float:
     return entropy
 
 
+_PACKER_TOOL_NAMES = {"upx.exe", "upx", "mpress.exe", "petite.exe"}
+
+
+def _is_packer_tool_itself(filepath: str, sig_result: Dict) -> bool:
+    """Detect if binary is a packer TOOL (not packed malware).
+
+    Requires ALL of:
+      1. Filename matches known packer tool names
+      2. File is signed OR in a legitimate path (Downloads, Program Files)
+      3. File contains packer tool signatures (help text, version strings)
+
+    Multi-condition: attacker can rename binary, but can't easily fake
+    embedded tool strings + signed status + filename all together.
+    """
+    filename = os.path.basename(filepath).lower()
+    if filename not in _PACKER_TOOL_NAMES:
+        return False
+
+    # Condition 2: signed OR legitimate path
+    legitimate_paths = (
+        "\\program files", "\\tools\\",
+        "\\downloads\\", "\\desktop\\",
+    )
+    in_legit_path = any(
+        p in filepath.lower() for p in legitimate_paths
+    )
+    if not sig_result.get("signed") and not in_legit_path:
+        return False  # Suspicious location + unsigned = NOT trusted
+
+    # Condition 3: contains packer tool strings
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(8192)
+        tool_sigs = [b"Ultimate Packer for eXecutables", b"UPX", b"--best"]
+        if any(s in header for s in tool_sigs):
+            return True
+    except (OSError, PermissionError):
+        pass
+
+    return False
+
+
+def _evaluate_pe_finding(
+    sig_result: Dict,
+    is_native: bool,
+    original_risk: RiskLevel,
+) -> Tuple[RiskLevel, Optional[str]]:
+    """Evaluate PE analysis finding considering signature status.
+
+    Returns (adjusted_risk, fp_reason or None).
+
+    Three-tier logic:
+    - Signed + trusted vendor → INFO (still reported, informational)
+    - Signed + unknown vendor → MEDIUM (cautious downgrade)
+    - Unsigned → original risk (no adjustment)
+
+    Signed ≠ safe (SolarWinds). Finding is NEVER deleted.
+    """
+    signer = sig_result.get("signer", "Unknown")
+
+    if sig_result.get("trusted"):
+        fp_reason = f"Signed by trusted vendor: {signer}"
+        return RiskLevel.INFO, fp_reason
+
+    if sig_result.get("signed"):
+        fp_reason = f"Signed (not in trusted list): {signer}"
+        if original_risk == RiskLevel.HIGH:
+            return RiskLevel.MEDIUM, fp_reason
+        return original_risk, None  # MEDIUM stays MEDIUM
+
+    if is_native:
+        fp_reason = "OS-native path (unsigned)"
+        return RiskLevel.INFO, fp_reason
+
+    # Unsigned — full risk, no downgrade
+    return original_risk, None
+
+
 def _analyze_pe_headers(
     filepath: str,
-    is_trusted: bool = False,
+    sig_result: Optional[Dict] = None,
     is_native: bool = False,
 ) -> List[Finding]:
     """Analyze PE section headers for packing/encryption indicators.
@@ -514,6 +591,8 @@ def _analyze_pe_headers(
 
     MITRE: T1027.002 (Obfuscated Files or Information: Software Packing)
     """
+    if sig_result is None:
+        sig_result = {}
     findings = []
     basename = os.path.basename(filepath)
 
@@ -577,9 +656,12 @@ def _analyze_pe_headers(
                     packer_sections.append(sec["name"])
 
                 # Check 2: RWX (writable + executable)
+                # Exclude .textbss — compiler-generated uninitialized BSS segment,
+                # commonly has RWX flags but is not a real threat.
                 chars = sec["characteristics"]
                 if (chars & _IMAGE_SCN_MEM_EXECUTE) and (chars & _IMAGE_SCN_MEM_WRITE):
-                    rwx_sections.append(sec["name"])
+                    if sec["name"] != ".textbss":
+                        rwx_sections.append(sec["name"])
 
                 # Check 3: Shannon entropy (only for sections with raw data)
                 if sec["raw_size"] > 0 and sec["raw_ptr"] > 0:
@@ -597,76 +679,122 @@ def _analyze_pe_headers(
 
             # ---- Generate Findings ----
             if packer_sections:
-                findings.append(Finding(
-                    module="File Scanner",
-                    risk=RiskLevel.HIGH,
-                    title=f"Packed executable detected: {basename}",
-                    description=(
-                        f"PE file contains known packer section(s): "
-                        f"{', '.join(packer_sections)}. Packed executables are "
-                        "commonly used to evade antivirus detection."
-                    ),
-                    details={
+                # Check if this is a packer tool itself (e.g., upx.exe)
+                if _is_packer_tool_itself(filepath, sig_result):
+                    findings.append(Finding(
+                        module="File Scanner",
+                        risk=RiskLevel.INFO,
+                        title=f"Packer tool detected: {basename}",
+                        description=(
+                            "This is a packer utility, not packed malware."
+                        ),
+                        details={
+                            "path": filepath,
+                            "packer_sections": packer_sections,
+                            "size": _safe_filesize(filepath),
+                            "detection": "PE Header Analysis",
+                            "fp_reason": "Binary is a packer tool itself (UPX/MPRESS)",
+                            "original_risk": RiskLevel.HIGH.value,
+                        },
+                        mitre_id="T1027.002",
+                        remediation="No action needed — this is a packing utility.",
+                    ))
+                else:
+                    adj_risk, fp_reason = _evaluate_pe_finding(
+                        sig_result, is_native, RiskLevel.HIGH,
+                    )
+                    det = {
                         "path": filepath,
                         "packer_sections": packer_sections,
                         "size": _safe_filesize(filepath),
                         "detection": "PE Header Analysis",
-                    },
-                    mitre_id="T1027.002",
-                    remediation=(
-                        "Investigate the origin of this packed executable. "
-                        "Submit to VirusTotal or a sandbox for dynamic analysis."
-                    ),
-                ))
+                    }
+                    if fp_reason:
+                        det["fp_reason"] = fp_reason
+                        det["original_risk"] = RiskLevel.HIGH.value
+                    findings.append(Finding(
+                        module="File Scanner",
+                        risk=adj_risk,
+                        title=f"Packed executable detected: {basename}",
+                        description=(
+                            f"PE file contains known packer section(s): "
+                            f"{', '.join(packer_sections)}. Packed executables are "
+                            "commonly used to evade antivirus detection."
+                        ),
+                        details=det,
+                        mitre_id="T1027.002",
+                        remediation=(
+                            "Investigate the origin of this packed executable. "
+                            "Submit to VirusTotal or a sandbox for dynamic analysis."
+                        ),
+                    ))
 
             if high_entropy_sections:
-                names_str = ", ".join(
-                    f"{n} ({e})" for n, e in high_entropy_sections
-                )
-                # Trusted-signed or OS-native files commonly have high-entropy
-                # sections (compressed resources in installers, signed system DLLs).
-                # Downgrade to INFO — still reported, never suppressed.
-                entropy_risk = RiskLevel.INFO if (is_trusted or is_native) else RiskLevel.MEDIUM
-                findings.append(Finding(
-                    module="File Scanner",
-                    risk=entropy_risk,
-                    title=f"High-entropy PE sections: {basename}",
-                    description=(
-                        f"PE sections with entropy >7.0 (packed/encrypted): "
-                        f"{names_str}. This may indicate the executable is "
-                        "packed or contains encrypted payloads."
-                    ),
-                    details={
+                # .rsrc sections naturally have high entropy (compressed icons,
+                # images, manifests). If ONLY .rsrc is high-entropy with no
+                # other suspicious sections, suppress entirely — pure noise.
+                _RESOURCE_ONLY = {".rsrc", ".qtmimed"}
+                entropy_names = {n for n, _ in high_entropy_sections}
+                if entropy_names.issubset(_RESOURCE_ONLY) and not packer_sections and not rwx_sections:
+                    pass  # suppress — resource-only entropy is not suspicious
+                else:
+                    names_str = ", ".join(
+                        f"{n} ({e})" for n, e in high_entropy_sections
+                    )
+                    adj_risk, fp_reason = _evaluate_pe_finding(
+                        sig_result, is_native, RiskLevel.MEDIUM,
+                    )
+                    det = {
                         "path": filepath,
                         "high_entropy_sections": {
                             n: e for n, e in high_entropy_sections
                         },
                         "size": _safe_filesize(filepath),
                         "detection": "Entropy Analysis",
-                    },
-                    mitre_id="T1027.002",
-                    remediation=(
-                        "Analyze the executable with a disassembler or sandbox. "
-                        "High entropy in code sections suggests packing or encryption."
-                    ),
-                ))
+                    }
+                    if fp_reason:
+                        det["fp_reason"] = fp_reason
+                        det["original_risk"] = RiskLevel.MEDIUM.value
+                    findings.append(Finding(
+                        module="File Scanner",
+                        risk=adj_risk,
+                        title=f"High-entropy PE sections: {basename}",
+                        description=(
+                            f"PE sections with entropy >7.0 (packed/encrypted): "
+                            f"{names_str}. This may indicate the executable is "
+                            "packed or contains encrypted payloads."
+                        ),
+                        details=det,
+                        mitre_id="T1027.002",
+                        remediation=(
+                            "Analyze the executable with a disassembler or sandbox. "
+                            "High entropy in code sections suggests packing or encryption."
+                        ),
+                    ))
 
             if rwx_sections and not packer_sections:
                 # Only flag RWX if no packer already found (avoid double-flagging)
+                adj_risk, fp_reason = _evaluate_pe_finding(
+                    sig_result, is_native, RiskLevel.MEDIUM,
+                )
+                det = {
+                    "path": filepath,
+                    "rwx_sections": rwx_sections,
+                    "detection": "PE Characteristic Analysis",
+                }
+                if fp_reason:
+                    det["fp_reason"] = fp_reason
+                    det["original_risk"] = RiskLevel.MEDIUM.value
                 findings.append(Finding(
                     module="File Scanner",
-                    risk=RiskLevel.MEDIUM,
+                    risk=adj_risk,
                     title=f"RWX PE sections: {basename}",
                     description=(
                         f"PE has sections with Read+Write+Execute permissions: "
                         f"{', '.join(rwx_sections)}. This is unusual and may "
                         "indicate self-modifying code or runtime unpacking."
                     ),
-                    details={
-                        "path": filepath,
-                        "rwx_sections": rwx_sections,
-                        "detection": "PE Characteristic Analysis",
-                    },
+                    details=det,
                     mitre_id="T1027.002",
                     remediation=(
                         "Investigate why this executable has writable+executable "
@@ -851,7 +979,15 @@ def scan() -> List[Finding]:
     high_priority_dirs = _resolve_high_priority_dirs()
 
     hp_files, rest_files = _collect_full_disk_files(throttle, high_priority_dirs)
-    all_files = hp_files + rest_files
+    # Deduplicate: Phase 2 walk may revisit subdirs already scanned in Phase 1
+    _seen_paths: set = set()
+    unique_files: List[str] = []
+    for _fp in hp_files + rest_files:
+        _norm = os.path.normpath(_fp).lower()
+        if _norm not in _seen_paths:
+            _seen_paths.add(_norm)
+            unique_files.append(_fp)
+    all_files = unique_files
     total = len(all_files)
     print(f"  [i] Phase 1 (high-risk dirs): {len(hp_files)} files")
     print(f"  [i] Phase 2 (full disk):      {len(rest_files)} files")
@@ -861,8 +997,11 @@ def scan() -> List[Finding]:
         print("  [i] No target files found.")
         return findings
 
-    # Scan files
+    # Scan files — same-hash dedup: identical binaries in multiple
+    # locations are collapsed into one finding with duplicate_paths.
+    # Safe because same SHA256 = same bytes = same threat.
     scanned = 0
+    _seen_hashes: Dict[str, Finding] = {}  # sha256 -> first Finding
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         batch_size = 50
         for i in range(0, total, batch_size):
@@ -876,6 +1015,15 @@ def scan() -> List[Finding]:
                 try:
                     file_findings = future.result()
                     for f in file_findings:
+                        sha = f.details.get("sha256")
+                        if sha and sha in _seen_hashes:
+                            first = _seen_hashes[sha]
+                            first.details.setdefault(
+                                "duplicate_paths", []
+                            ).append(f.details.get("path", ""))
+                            continue  # Skip duplicate binary
+                        if sha:
+                            _seen_hashes[sha] = f
                         findings.append(f)
                         print_finding(f)
                 except Exception:

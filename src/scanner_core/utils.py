@@ -26,17 +26,29 @@ from scanner_core.models import Finding, RiskLevel, calculate_risk_score
 # Resource / IOC Path Resolution
 # ---------------------------------------------------------------------------
 def get_resource_path(relative_path: str) -> str:
-    """Resolve path for Nuitka onefile, PyInstaller bundle, and dev mode."""
-    # 1. Nuitka onefile — data extracted beside the binary
-    nuitka_dir = globals().get("__nuitka_binary_dir")
-    if nuitka_dir:
-        base = nuitka_dir
-    # 2. PyInstaller (legacy)
+    """Resolve path for Nuitka onefile, PyInstaller bundle, and dev mode.
+
+    Resolution order:
+      1. Nuitka compiled (__compiled__.containing_dir) — data beside exe
+      2. Nuitka legacy (__nuitka_binary_dir in main module)
+      3. PyInstaller (_MEIPASS)
+      4. Dev mode — project root from src/scanner_core/utils.py
+    """
+    # 1. Nuitka (modern) — __compiled__ is set by Nuitka in every module
+    _compiled = globals().get("__compiled__")
+    if _compiled and hasattr(_compiled, "containing_dir"):
+        base = _compiled.containing_dir
+    # 2. Nuitka (legacy) — check main module's global
+    elif hasattr(sys, "frozen") or globals().get("__nuitka_binary_dir"):
+        # For onefile: data files are next to the exe
+        base = os.path.dirname(os.path.abspath(sys.argv[0]))
+    # 3. PyInstaller (legacy)
     elif getattr(sys, "_MEIPASS", None):
         base = sys._MEIPASS
-    # 3. Dev mode — src/scanner_core/ -> src/ -> project root
+    # 4. Dev mode — src/scanner_core/ -> src/ -> project root
     else:
-        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
     return os.path.join(base, relative_path)
 
 
